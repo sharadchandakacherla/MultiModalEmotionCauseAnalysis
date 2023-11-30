@@ -363,8 +363,6 @@ def read_examples(examples, is_training = True):
         "surprise": "surprise"
     }
     for example in input_data:
-
-
         for i, current_utt in enumerate(example['conversation']):
             current_emotion = current_utt['emotion']
             if current_emotion == 'neutral':
@@ -407,6 +405,7 @@ def read_examples(examples, is_training = True):
             # print(self.tokenizer(sample2))
             #print(sample2)
             if is_training:
+                labels_arr = []
                 labels_arr = _get_emotion_cause_labels(example = example , current_emotion= current_emotion, current_conv_id= current_utterance_id, conversation = conversation_until_now)
                 #start_position, end_position = _get_emotion_cause_labels(example, current_emotion ,current_utterance, i)
                 for labels in labels_arr:
@@ -562,21 +561,22 @@ def _get_emotion_cause_labels(example , current_emotion, current_conv_id, conver
 
 
 if __name__ == '__main__':
-    train_examples = read_examples("../data/raw/SemEval-2024_Task3/text/Subtask_1_2_train.json", False)
-    #train_examples = read_example("raw/SemEval-2024_Task3/text/random_trial.json", True)
-    print(f'no of PROCESSED examples : {len(train_examples)}')
-    print(train_examples[0])
-    max_seq_length = 512
-    doc_stride = 128
-    max_query_length = 64
-    train_batch_size = 32
-    model_name = 'SpanBERT/spanbert-base-cased'
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    train_features = convert_examples_to_features(
-        examples=train_examples,
-        tokenizer=tokenizer,
-        max_seq_length=max_seq_length,
-        doc_stride=doc_stride,
-        max_query_length=max_query_length,
-        is_training=False)
-    print(len(train_features))
+    pass
+    # train_examples = read_examples("../data/raw/SemEval-2024_Task3/text/Subtask_1_2_train.json", False)
+    # #train_examples = read_example("raw/SemEval-2024_Task3/text/random_trial.json", True)
+    # print(f'no of PROCESSED examples : {len(train_examples)}')
+    # print(train_examples[0])
+    # max_seq_length = 512
+    # doc_stride = 128
+    # max_query_length = 64
+    # train_batch_size = 32
+    # model_name = 'SpanBERT/spanbert-base-cased'
+    # tokenizer = AutoTokenizer.from_pretrained(model_name)
+    # train_features = convert_examples_to_features(
+    #     examples=train_examples,
+    #     tokenizer=tokenizer,
+    #     max_seq_length=max_seq_length,
+    #     doc_stride=doc_stride,
+    #     max_query_length=max_query_length,
+    #     is_training=False)
+    # print(len(train_features))
