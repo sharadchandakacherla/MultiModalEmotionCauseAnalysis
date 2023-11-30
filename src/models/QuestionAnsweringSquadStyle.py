@@ -11,7 +11,7 @@ from transformers import AutoTokenizer, AutoModelForQuestionAnswering, Trainer, 
 import os
 import json
 
-from data.dataset_utils import read_examples, convert_examples_to_features
+from data.dataset_utils import read_examples, convert_examples_to_features, convert_to_squad, read_squad_examples
 
 model_name = 'SpanBERT/spanbert-base-cased'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -42,8 +42,12 @@ training_offset =  int(train_eval_ratio*len(input_data))
 training_data = input_data[:training_offset]
 eval_data = input_data[training_offset:]
 
-examples_train = read_examples(training_data, is_training=True)
-examples_eval = read_examples(eval_data, is_training=False)
+training_intermediate = convert_to_squad(training_data)
+
+
+#examples_train = read_examples(training_data, is_training=True)
+examples_train = read_squad_examples(input_file=training_intermediate['data'], is_training=True, version_2_with_negative=False)
+
 train_features = convert_examples_to_features(
         examples=examples_train,
         tokenizer=tokenizer,
@@ -55,7 +59,6 @@ train_features = convert_examples_to_features(
 
 
 print(f'here {type(train_features[0])}')
-
 all_input_ids = torch.tensor([f.input_ids for f in train_features], dtype=torch.long)
 all_input_mask = torch.tensor([f.input_mask for f in train_features], dtype=torch.long)
 all_segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long)
@@ -67,6 +70,8 @@ train_dataloader = DataLoader(train_data, batch_size=train_batch_size)
 train_batches = [batch for batch in train_dataloader]
 
 print('processing eval data')
+eval_intermediate = convert_to_squad(eval_data)
+examples_eval = read_squad_examples(input_file=eval_intermediate['data'], is_training=False, version_2_with_negative=False)
 eval_features = convert_examples_to_features(
         examples=examples_eval,
         tokenizer=tokenizer,
