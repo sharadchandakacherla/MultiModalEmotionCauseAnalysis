@@ -1,0 +1,3 @@
+[submodule "v2/SpanBERT"]
+	path = v2/SpanBERT
+	url = git@github.com:facebookresearch/SpanBERT.git
