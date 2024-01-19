@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 from enum import IntEnum
 
@@ -15,11 +16,11 @@ class TaskSolve(IntEnum):
 
 @dataclass
 class TrainerConfig:
-    base_path: str = ''
+    base_path: str = os.getcwd()
     model_log_path: str = ''
     model_save_path: str = ''
     base_model_name: str = ''
-    no_classes: int = 7
+    no_classes: int = 7 # 6 + 1
     train_split_ratio: float = 0.8
     splitting_seed: int = 42
     epochs: int = 10
@@ -27,8 +28,9 @@ class TrainerConfig:
     lr: float = 1e-3
     train_batch_size: int = 4
     val_batch_size: int = 4
-    is_train: bool = True
+#     is_train: bool = True
     training_type: TrainingType = TrainingType.JOINT_TRAINING
     freeze_base_model: bool = False
     solve_task: TaskSolve = TaskSolve.TASK1
+    special_token: str = '<SEP>'
 
