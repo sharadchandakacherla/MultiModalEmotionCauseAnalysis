@@ -16,7 +16,7 @@ from dataset import DatasetConfig, EmotionCausalDataset
 def select_model(training_type: TrainingType, solve_task: TaskSolve):
     model = None
     
-    if solve_task == TaskSolve.TYPE_1:
+    if solve_task == TaskSolve.TASK1:
         if training_type == TrainingType.JOINT_TRAINING:
             model = JointModel
         elif training_type == TrainingType.EMOTION_CLASSIFICATION:
@@ -25,7 +25,7 @@ def select_model(training_type: TrainingType, solve_task: TaskSolve):
             model = SpanClassification
         else:
             raise NotImplementedError(f'ill-defined training type {training_type} for task type {solve_task}')
-    elif config.solve_task == TaskSolve.TYPE_2:
+    elif solve_task == TaskSolve.TASK2:
         # TODO: Next phase.
         pass
         
@@ -43,20 +43,20 @@ class Trainer:
         model_cls = select_model(config.training_type, config.solve_task)
             
         self.model = model_cls(base_model_name=config.base_model_name, no_classes=config.base_model_name)
-        if config.solve_task == TaskSolve.TYPE_1:
+        if config.solve_task == TaskSolve.TASK1:
             self.model.add_special_token_to_tokenizer(config.special_token)
         
         if config.freeze_base_model:
             self.model.freeze_base_model()
             
-        if config.solve_task == TaskSolve.TYPE_1:
+        if config.solve_task == TaskSolve.TASK1:
             path = os.path.join(config.base_path, 'data', 'text')
-            train_dataset = EmotionCausalDataset(path, DatasetConfig.TRAIN, config.training_type, model.tokenizer(), device=self.device, seed=config.seed, split=config.train_split_ratio)
+            train_dataset = EmotionCausalDataset(path, DatasetConfig.TRAIN, config.training_type, self.model.tokenizer(), device=self.device, seed=config.seed, split=config.train_split_ratio)
             
-            val_dataset = EmotionCausalDataset(path, DatasetConfig.VAL, config.training_type, model.tokenizer(), device=self.device, seed=config.seed, split=config.train_split_ratio)
+            val_dataset = EmotionCausalDataset(path, DatasetConfig.VAL, config.training_type, self.model.tokenizer(), device=self.device, seed=config.seed, split=config.train_split_ratio)
             
-            test_dataset = EmotionCausalDataset(path, DatasetConfig.TEST, config.training_type, model.tokenizer(), device=self.device, seed=config.seed, split=config.train_split_ratio)
-        elif config.solve_task == TaskSolve.TYPE_2:
+            test_dataset = EmotionCausalDataset(path, DatasetConfig.TEST, config.training_type, self.model.tokenizer(), device=self.device, seed=config.seed, split=config.train_split_ratio)
+        elif config.solve_task == TaskSolve.TASK2:
             pass
         
         self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=config.train_batch_size, shuffle=True)
