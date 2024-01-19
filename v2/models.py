@@ -23,10 +23,17 @@ class ModelBaseClass(nn.Module):
             self.model = AutoModel.from_pretrained(base_model_name)
         elif model_type == ModelType.ROBERTA_SEQUENCE_MODEL:
             self.model = RobertaForSequenceClassification.from_pretrained(base_model_name)
+            
+        self._tokenizer = AutoTokenizer.from_pretrained(self.base_model_name)
         
     def tokenizer(self):
-        return AutoTokenizer.from_pretrained(self.base_model_name)
-        
+        return self._tokenizer
+    
+    def add_special_token_to_tokenizer(self, token):
+        if token not in self._tokenizer.special_tokens_map:
+            self._tokenizer.add_tokens(token, special_tokens=True)
+            self.model.resize_token_embeddings(len(self._tokenizer))
+    
     def forward(self, x):
         raise NotImplementedError(f'{self.__class__.__name__} did not implement forward.')
         
@@ -117,7 +124,9 @@ class JointModel(ModelBaseClass):
             total_loss = (span_loss + emotion_loss) / 3
         
         return {
-            'loss': total_loss
+            'loss': total_loss,
+            'emotion_logits': emotion_logits,
+            'span_logits': span_logits
         }
     
     
@@ -140,7 +149,7 @@ class EmotionClassifcation(ModelBaseClass):
         
         return {
             'loss': out.loss,
-            'logits': out.logits
+            'emotion_logits': out.logits
         }
     
 class SpanClassification(ModelBaseClass):
@@ -163,6 +172,7 @@ class SpanClassification(ModelBaseClass):
             loss /= 2
         
         return {
-            'loss': loss
+            'loss': loss,
+            'span_logits': span_logits
         }
     
