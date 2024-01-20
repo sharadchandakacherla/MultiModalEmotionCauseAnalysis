@@ -4,9 +4,9 @@ import torch
 import numpy as np
 import json
 from enum import IntEnum
-from typing import List, Dict
+from typing import List, Dict, Type
 from torch.utils.data import Dataset
-from transformers import AutoTokenizer
+from transformers import PreTrainedTokenizerFast, AutoTokenizer
 
 from config import TrainingType
 
@@ -22,8 +22,9 @@ class EmotionCausalDataset(Dataset):
     Dataset class for subtask 1
     """
 
-    def __init__(self, path: str, config: DatasetConfig, training_type: TrainingType, tokenizer: AutoTokenizer,
-                 device=torch.device('cpu'), seed=42, split=0.8, special_token='<SEP>'):
+    def __init__(self, path: str, config: DatasetConfig, training_type: TrainingType,
+                 tokenizer: Type[PreTrainedTokenizerFast], device=torch.device('cpu'),
+                 seed=42, split=0.8, special_token='<SEP>'):
         self.path = path
         self.device = device
         self.tokenizer = tokenizer
@@ -206,9 +207,11 @@ class EmotionCausalDataset(Dataset):
         tokenized_inp = self.tokenizer(text_inp, padding='max_length', max_length=512, return_tensors='pt',
                                        truncation=True)
         tokenized_labels = self.tokenizer(causal_span_label, return_tensors='pt',
-                                          truncation=True) if causal_span_label[0] != -1 else torch.Tensor(causal_span_label)
+                                          truncation=True) if causal_span_label[0] != -1 else torch.Tensor(
+            causal_span_label)
 
-        causal_span_label = find_nth_occurrence(tokenized_inp['input_ids'][0], tokenized_labels, n=2) if causal_span_label is not None else {}
+        causal_span_label = find_nth_occurrence(tokenized_inp['input_ids'][0], tokenized_labels,
+                                                n=2) if causal_span_label is not None else {}
 
         if emotion_label is not None:
             emo_label = np.zeros(len(self.emotion_labels))
@@ -226,7 +229,7 @@ class EmotionCausalDataset(Dataset):
 
 def find_nth_occurrence(haystack, needle, n=2):
     occurrence = 0
-    if needle[0]!=-1:
+    if needle[0] != -1:
         needle = needle['input_ids'][0][1:-1]
         for i in range(haystack.shape[0] - needle.shape[0] + 1):
             if torch.equal(haystack[i:i + needle.shape[0]], needle):
@@ -237,10 +240,11 @@ def find_nth_occurrence(haystack, needle, n=2):
         return {"start_positions": torch.tensor([0]), "end_positions": torch.tensor([0])}
     return {"start_positions": torch.tensor([0]), "end_positions": torch.tensor([0])}
 
+
 if __name__ == "__main__":
     path = '../data/raw/SemEval-2024_Task3/dataset_final/train/text_files/text'
-    tokenizer = AutoTokenizer.from_pretrained("SpanBERT/spanbert-base-cased")
-    dataset = EmotionCausalDataset(path=path, device="cpu", config=DatasetConfig.TRAIN,
-                                   training_type=TrainingType.SPAN_CLASSIFICATION, tokenizer=tokenizer)
+    _tokenizer = AutoTokenizer.from_pretrained("SpanBERT/spanbert-base-cased")
+    dataset = EmotionCausalDataset(path=path, config=DatasetConfig.TRAIN,
+                                   training_type=TrainingType.SPAN_CLASSIFICATION, tokenizer=_tokenizer)
     da = dataset[0]
     print(len(dataset))
