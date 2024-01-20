@@ -220,7 +220,7 @@ class EmotionCausalDataset(Dataset):
         else:
             emotion_label = {}
 
-        tokenized_inp = {k: v.to(self.device) for k, v in tokenized_inp.items()}
+        tokenized_inp = {k: v.squeeze().to(self.device) for k, v in tokenized_inp.items()}
         labels = {**emotion_label, **causal_span_label}
         labels = {k: v.to(self.device) for k, v in labels.items()}
 
