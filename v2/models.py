@@ -63,7 +63,7 @@ class ModelBaseClass(nn.Module):
             start_pos = start_pos.clamp(0, ignored_idx)
             end_pos = end_pos.clamp(0, ignored_idx)
 
-            ce_loss = nn.CrosEntropyLoss(ignore_index=ignored_idx)
+            ce_loss = nn.CrossEntropyLoss(ignore_index=ignored_idx)
             start_loss = ce_loss(start_logits, start_pos)
             end_loss = ce_loss(end_logits, end_pos)
 
@@ -73,10 +73,10 @@ class ModelBaseClass(nn.Module):
 
     def _emotion_loss(self, x, emotion_logits) -> torch.Tensor:
         loss = None
-        labels = x.get('labels', None)
+        labels = x.get('label', None)
 
         if labels is not None:
-            ce_loss = nn.CrosEntropyLoss()
+            ce_loss = nn.CrossEntropyLoss()
             loss = ce_loss(emotion_logits, labels)
 
         return loss
