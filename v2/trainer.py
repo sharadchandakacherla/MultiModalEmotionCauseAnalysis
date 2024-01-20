@@ -5,7 +5,9 @@ import torch
 from torch import multiprocessing as mp
 import torch.distributed as dist
 from torch.optim import AdamW
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
+from torch.utils.data.distributed import DistributedSampler
+from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from transformers import get_cosine_schedule_with_warmup
 from tqdm import tqdm
