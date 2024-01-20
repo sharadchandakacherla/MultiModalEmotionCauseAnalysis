@@ -48,7 +48,7 @@ class ModelBaseClass(nn.Module):
     def _span_loss(self, x, span_logits) -> torch.Tensor:
         total_loss = None
 
-        start_logits, end_logits = span_logits[:, 0].contiguous(), span_logits[:, 1].contiguous()
+        start_logits, end_logits = (x.squeeze(-1).contiguous() for x in span_logits.split(1, dim=-1))
 
         start_pos = x.get('start_positions', None)
         end_pos = x.get('end_positions', None)
@@ -108,8 +108,7 @@ class JointModel(ModelBaseClass):
         )
 
     def forward(self, x, labels):
-        print(x.keys())
-        out = self.model(x)
+        out = self.model(**x)
         hidden_state = out['last_hidden_state']
         pooler_out = out['pooler_output']
 
