@@ -26,11 +26,11 @@ class TrainerConfig:
     epochs: int = 10
     current_epoch: int = 1
     lr: float = 1e-3
-    train_batch_size: int = 4
-    val_batch_size: int = 4
+    train_batch_size: int = 4 * 8
+    val_batch_size: int = 4 * 8
 #     is_train: bool = True
     training_type: TrainingType = TrainingType.JOINT_TRAINING
     freeze_base_model: bool = False
     solve_task: TaskSolve = TaskSolve.TASK1
     special_token: str = '<SEP>'
-
+    multi_gpu: bool = True

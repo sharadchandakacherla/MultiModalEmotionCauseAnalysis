@@ -10,10 +10,11 @@ class ModelType(IntEnum):
     AUTO_MODEL = 1
     ROBERTA_SEQUENCE_MODEL = 2
     SPANBERT_MODEL = 3
+    NONE = 4
 
 
 class ModelBaseClass(nn.Module):
-    def __init__(self, base_model_name: str, no_classes: int, model_type: ModelType):
+    def __init__(self, base_model_name: str, no_classes: int, model_type: ModelType = ModelType.NONE):
         super(ModelBaseClass, self).__init__()
         self.base_model_name = base_model_name
         self.no_classes = no_classes
