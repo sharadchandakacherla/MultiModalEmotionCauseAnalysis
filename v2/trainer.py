@@ -36,13 +36,13 @@ class Trainer:
     def __init__(self, config: TrainerConfig):
         self.config = config
 
-        os.makedirs(config.model_save_path, exist_ok=True)
-        os.makedirs(config.model_log_path, exist_ok=True)
+        os.makedirs(os.path.join(config.base_path, config.model_save_path), exist_ok=True)
+        os.makedirs(os.path.join(config.base_path, config.model_log_path), exist_ok=True)
 
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         model_cls = select_model(config.training_type, config.solve_task)
 
-        self.model = model_cls(base_model_name=config.base_model_name, no_classes=config.base_model_name) \
+        self.model = model_cls(base_model_name=config.base_model_name, no_classes=config.no_classes) \
             .to(self.device)
 
         if config.solve_task == TaskSolve.TASK1:
@@ -62,17 +62,17 @@ class Trainer:
                                                device=self.device, seed=config.splitting_seed,
                                                split=config.train_split_ratio)
 
-            test_dataset = EmotionCausalDataset(path, DatasetConfig.TEST, config.training_type, tokenizer,
-                                                device=self.device, seed=config.splitting_seed,
-                                                split=config.train_split_ratio)
+        #             test_dataset = EmotionCausalDataset(path, DatasetConfig.TEST, config.training_type, tokenizer,
+        #                                                 device=self.device, seed=config.splitting_seed,
+        #                                                 split=config.train_split_ratio)
         elif config.solve_task == TaskSolve.TASK2:
             pass
 
         self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=config.train_batch_size, shuffle=True)
         self.val_dataloader = DataLoader(dataset=val_dataset, batch_size=config.val_batch_size, shuffle=False)
-        self.test_dataloader = DataLoader(dataset=test_dataset, batch_size=config.val_batch_size, shuffle=False)
+        #         self.test_dataloader = DataLoader(dataset=test_dataset, batch_size=config.val_batch_size, shuffle=False)
 
-        self.writer = SummaryWriter(log_dir=config.model_log_path)
+        self.writer = SummaryWriter(log_dir=os.path.join(config.base_path, config.model_log_path))
 
         total_steps = config.epochs * len(self.train_dataloader)
 
@@ -89,7 +89,7 @@ class Trainer:
         Load the model state from checkpoints if any.
         param index: Loads the checkpoint based on created date index. Defaults to -1 to load the latest checkpoint.
         """
-        save_path = self.config.model_save_path
+        save_path = os.path.join(self.config.base_path, self.config.model_save_path)
         items = [os.path.join(save_path, item) for item in os.listdir(save_path)]
         if items:
             checkpoint_path = sorted(items, key=os.path.getctime)[index]
@@ -104,7 +104,7 @@ class Trainer:
             self.config.current_epoch = 1 + checkpoint['epoch']
 
     def _save_model_state(self, current_epoch: int, **kwargs):
-        path = os.path.join(self.config.model_save_path, f'{current_epoch}.pt')
+        path = os.path.join(self.config.base_path, self.config.model_save_path, f'{current_epoch}.pt')
         torch.save({
             'epoch': current_epoch,
             'model': self.model.state_dict(),
@@ -121,10 +121,10 @@ class Trainer:
 
             global_step = (epoch - 1) * len(self.train_dataloader)
             with tqdm(total=len(self.train_dataloader), colour='cyan', leave=False) as bar:
-                for idx, batch in enumerate(self.train_dataloader, start=1):
+                for idx, (inp, labels) in enumerate(self.train_dataloader, start=1):
                     self.optim.zero_grad()
 
-                    out = self.model(**batch)
+                    out = self.model(inp, labels)
                     loss = out['loss']
                     loss.backward()
 
@@ -164,5 +164,13 @@ class Trainer:
 
             self.optim_lr_scheduler.step()
 
+            self._save_model_state(self.config.current_epoch)
+            self.config.current_epoch += 1
+
     def evaluate_task1(self):
         pass
+
+
+if __name__ == '__main__':
+    trainer = Trainer(TrainerConfig())
+    trainer.train_task1()

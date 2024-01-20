@@ -17,9 +17,9 @@ class TaskSolve(IntEnum):
 @dataclass
 class TrainerConfig:
     base_path: str = os.getcwd()
-    model_log_path: str = ''
-    model_save_path: str = ''
-    base_model_name: str = ''
+    model_log_path: str = 'finetune_mrm8488_spanbert-finetuned-squadv2_log'
+    model_save_path: str = 'finetune_mrm8488_spanbert-finetuned-squadv2_save'
+    base_model_name: str = 'mrm8488/spanbert-finetuned-squadv2'
     no_classes: int = 7 # 6 + 1
     train_split_ratio: float = 0.8
     splitting_seed: int = 42

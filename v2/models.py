@@ -34,7 +34,7 @@ class ModelBaseClass(nn.Module):
             self._tokenizer.add_tokens(token, special_tokens=True)
             self.model.resize_token_embeddings(len(self._tokenizer))
 
-    def forward(self, x):
+    def forward(self, x, labels):
         raise NotImplementedError(f'{self.__class__.__name__} did not implement forward.')
 
     def freeze_base_model(self):
@@ -86,7 +86,7 @@ class JointModel(ModelBaseClass):
     def __init__(self, base_model_name: str, no_classes: int):
         """
             base_model_name: str for example SpanBERT/spanbert-base-cased; mrm8488/spanbert-finetuned-squadv2
-            no_classes: int 
+            no_classes: int
         """
 
         super(JointModel, self).__init__(base_model_name, no_classes, ModelType.AUTO_MODEL)
@@ -107,16 +107,17 @@ class JointModel(ModelBaseClass):
             nn.Linear(self.hidden_dim_pooler // 2, no_classes)
         )
 
-    def forward(self, x):
-        out = self.model(**x)
+    def forward(self, x, labels):
+        print(x.keys())
+        out = self.model(x)
         hidden_state = out['last_hidden_state']
         pooler_out = out['pooler_output']
 
         span_logits = self.span_head(hidden_state)
         emotion_logits = self.emotion_head(pooler_out)
 
-        span_loss = self._span_loss(x, span_logits)
-        emotion_loss = self._emotion_loss(x, emotion_logits)
+        span_loss = self._span_loss(labels, span_logits)
+        emotion_loss = self._emotion_loss(labels, emotion_logits)
 
         total_loss = None
 
@@ -134,7 +135,7 @@ class EmotionClassification(ModelBaseClass):
     def __init__(self, base_model_name: str, no_classes: int):
         """
             base_model_name: str for example "roberta-base"
-            no_classes: int 
+            no_classes: int
         """
 
         # TODO:
@@ -156,17 +157,17 @@ class SpanClassification(ModelBaseClass):
     def __init__(self, base_model_name: str, no_classes: int):
         """
             base_model_name: str for example SpanBERT/spanbert-base-cased; mrm8488/spanbert-finetuned-squadv2
-            no_classes: int 
+            no_classes: int
         """
         super(SpanClassification, self).__init__(base_model_name, no_classes, ModelType.SPANBERT_MODEL)
         self.hidden_dim = self.model.pooler.dense.out_features
         self.span_head = nn.Linear(self.hidden_dim, 2)
 
-    def forward(self, x):
+    def forward(self, x, labels):
         out = self.model(**x)
         # We use the hidden state before pooler layers.
         span_logits = self.span_head(out.last_hidden_state)
-        loss = self._span_loss(x, span_logits)
+        loss = self._span_loss(labels, span_logits)
 
         if loss is not None:
             loss /= 2

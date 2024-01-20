@@ -205,22 +205,26 @@ class EmotionCausalDataset(Dataset):
 
         tokenized_inp = self.tokenizer(text_inp, padding='max_length', max_length=512, return_tensors='pt',
                                        truncation=True)
+
         tokenized_labels = self.tokenizer(causal_span_label, padding='max_length', max_length=512, return_tensors='pt',
-                                          truncation=True)
+                                          truncation=True)['input_ids'] if causal_span_label[0] != -1 else torch.Tensor(
+            causal_span_label)
 
-        causal_span_label = find_nth_occurrence(tokenized_inp, tokenized_labels,
-                                                n=2) if causal_span_label is None else {}
+        causal_span_label = find_nth_occurrence(tokenized_inp['input_ids'], tokenized_labels,
+                                                n=2) if causal_span_label is not None else {}
 
-        if emotion_label is None:
+        if emotion_label is not None:
             emo_label = np.zeros(len(self.emotion_labels))
             emo_label[self.emotion_labels[emotion_label]] = 1
             emotion_label = {"label": torch.from_numpy(emo_label)}
         else:
             emotion_label = {}
 
-        out = {**tokenized_inp, **emotion_label, **causal_span_label}
-        out = {k: v.to(self.device) for k, v in out.items()}
-        return out
+        tokenized_inp = {k: v.to(self.device) for k, v in tokenized_inp.items()}
+        labels = {**emotion_label, **causal_span_label}
+        labels = {k: v.to(self.device) for k, v in labels.items()}
+
+        return tokenized_inp, labels
 
 
 def find_nth_occurrence(haystack, needle, n=2):
@@ -231,7 +235,7 @@ def find_nth_occurrence(haystack, needle, n=2):
             if occurrence == n:
                 return {"start_positions": torch.tensor([i]),
                         "end_positions": torch.tensor([i + needle.shape[0]])}
-    return {"start_positions": torch.tensor[0], "end_positions": torch.tensor[0]}
+    return {"start_positions": torch.Tensor([0]), "end_positions": torch.Tensor([0])}
 
 
 if __name__ == "__main__":
