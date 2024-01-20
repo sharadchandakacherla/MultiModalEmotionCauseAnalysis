@@ -3,16 +3,15 @@ import random
 import torch
 import numpy as np
 import json
-from enum import Enum
+from enum import IntEnum
 from typing import List, Dict
-from collections import defaultdict
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer
 
-from config import TrainingType, TrainerConfig
+from config import TrainingType
 
 
-class DatasetConfig(Enum):
+class DatasetConfig(IntEnum):
     TRAIN = 1
     VAL = 2
     TEST = 3
@@ -54,13 +53,14 @@ class EmotionCausalDataset(Dataset):
         self.process_dataset()
 
     def process_dataset(self):
+        processed_data = []
+
         if self.training_type == TrainingType.JOINT_TRAINING:
             processed_data = self._process_data_for_joint_model()
         elif self.training_type == TrainingType.EMOTION_CLASSIFICATION:
             processed_data = self._process_data_for_emotion_classification()
         elif self.training_type == TrainingType.SPAN_CLASSIFICATION:
             processed_data = self._process_data_for_span_classification()
-            pass
 
         self.processed_data = processed_data
 
@@ -84,7 +84,7 @@ class EmotionCausalDataset(Dataset):
 
                 utt_all = ' '.join(conv['text'] for conv in conversations)
                 # n^2 new examples for joint training.
-                for i,  conv_i in enumerate(conversations):
+                for i, conv_i in enumerate(conversations):
                     emotion = conv_i['emotion']
                     caused_in_i = conv_i['caused_by']
                     utt_i = conv_i["text"]
@@ -108,8 +108,6 @@ class EmotionCausalDataset(Dataset):
 
         else:
             raise NotImplementedError('Need to check in trail data.')
-
-
 
         return processed_data
 
@@ -201,16 +199,6 @@ class EmotionCausalDataset(Dataset):
             return text_inp, causal_span_label
         else:
             return text_inp, causal_span_label, emotion_label
-
-        # TODO: figure out the following. - All of them are resolved.
-        # 1. All conversations are concatenated to form text. (SQUAD 2.0-style prompting)
-        # 2. For each emotion for the text and it's cause a new pair of datapoint is formed. (Is this the correct way to form pairs?)
-        # 3. Construct Span Labels for the combined text.
-        # 4. for each datapoint emotion label and/or spans are to be selected based on TrainingType.
-        # 5. figure out effective batching. No OOM for VRAM.
-
-        # Local
-        # dataset.py, config.py
 
 
 if __name__ == "__main__":
