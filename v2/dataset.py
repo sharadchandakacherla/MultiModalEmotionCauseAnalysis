@@ -101,7 +101,7 @@ class EmotionCausalDataset(Dataset):
                     for j, conv_j in enumerate(conversations):
                         utt_j = conv_j['text']
                         prefix = f'{prompt} {self.SPECIAL_TOKEN}'
-                        text = f'{prefix}{utt_j} {self.SPECIAL_TOKEN} {utt_all}'
+                        text = f'{prefix} {utt_j} {self.SPECIAL_TOKEN} {utt_all}'
                         spans = [-1, -1]
 
                         if j in caused_in_i:
@@ -129,7 +129,6 @@ class EmotionCausalDataset(Dataset):
             for idx in self._sampling_idx:
                 scene = self.data[idx]
                 conversations = scene['conversation']
-                causal_pairs = scene['emotion-cause_pairs']
                 utt_all = ' '.join(conv['text'] for conv in conversations)
 
                 for conv in conversations:
@@ -222,6 +221,8 @@ class EmotionCausalDataset(Dataset):
         out = {**tokenized_inp, **emotion_label, **causal_span_label}
         out = {k: v.to(self.device) for k, v in out.items()}
         return out
+
+
 def find_nth_occurrence(haystack, needle, n=2):
     occurrence = 0
     for i in range(haystack.shape[0] - needle.shape[0] + 1):
@@ -232,9 +233,11 @@ def find_nth_occurrence(haystack, needle, n=2):
                         "end_positions": torch.tensor([i + needle.shape[0]])}
     return {"start_positions": torch.tensor[0], "end_positions": torch.tensor[0]}
 
+
 if __name__ == "__main__":
     path = '../data/raw/SemEval-2024_Task3/dataset_final/train/text_files/text'
     tokenizer = AutoTokenizer.from_pretrained("SpanBERT/spanbert-base-cased")
-    dataset = EmotionCausalDataset(path=path, device="cpu", config=DatasetConfig.TRAIN,training_type=TrainingType.JOINT_TRAINING, tokenizer=tokenizer)
+    dataset = EmotionCausalDataset(path=path, device="cpu", config=DatasetConfig.TRAIN,
+                                   training_type=TrainingType.JOINT_TRAINING, tokenizer=tokenizer)
     da = dataset[0]
     print(len(dataset))
