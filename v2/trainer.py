@@ -4,7 +4,9 @@ from typing import Union, Type
 import torch
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 from transformers import get_cosine_schedule_with_warmup
+from tqdm import tqdm
 
 from config import TrainerConfig, TrainingType, TaskSolve
 from dataset import DatasetConfig, EmotionCausalDataset
@@ -40,7 +42,9 @@ class Trainer:
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         model_cls = select_model(config.training_type, config.solve_task)
 
-        self.model = model_cls(base_model_name=config.base_model_name, no_classes=config.base_model_name)
+        self.model = model_cls(base_model_name=config.base_model_name, no_classes=config.base_model_name) \
+            .to(self.device)
+
         if config.solve_task == TaskSolve.TASK1:
             self.model.add_special_token_to_tokenizer(config.special_token)
 
@@ -58,7 +62,7 @@ class Trainer:
                                                device=self.device, seed=config.splitting_seed,
                                                split=config.train_split_ratio)
 
-            test_dataset = EmotionCausalDataset(path, DatasetConfig.TEST, config.training_type,tokenizer,
+            test_dataset = EmotionCausalDataset(path, DatasetConfig.TEST, config.training_type, tokenizer,
                                                 device=self.device, seed=config.splitting_seed,
                                                 split=config.train_split_ratio)
         elif config.solve_task == TaskSolve.TASK2:
@@ -67,6 +71,8 @@ class Trainer:
         self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=config.train_batch_size, shuffle=True)
         self.val_dataloader = DataLoader(dataset=val_dataset, batch_size=config.val_batch_size, shuffle=False)
         self.test_dataloader = DataLoader(dataset=test_dataset, batch_size=config.val_batch_size, shuffle=False)
+
+        self.writer = SummaryWriter(log_dir=config.model_log_path)
 
         total_steps = config.epochs * len(self.train_dataloader)
 
@@ -107,8 +113,56 @@ class Trainer:
             **kwargs
         }, f=path)
 
-    def train_type1(self):
-        pass
+    def train_task1(self):
+        running_loss, running_acc = 0.0, 0.0
 
-    def evaluate_type1(self):
+        for epoch in range(self.config.current_epoch, self.config.epochs + 1):
+            self.model.train()
+
+            global_step = (epoch - 1) * len(self.train_dataloader)
+            with tqdm(total=len(self.train_dataloader), colour='cyan', leave=False) as bar:
+                for idx, batch in enumerate(self.train_dataloader, start=1):
+                    self.optim.zero_grad()
+
+                    out = self.model(**batch)
+                    loss = out['loss']
+                    loss.backward()
+
+                    self.optim.step()
+
+                    running_loss += loss.item()
+                    avg_loss = running_loss / idx
+                    avg_emo_acc = None
+
+                    # TODO: Evaluate metrics.
+                    if self.config.training_type == TrainingType.JOINT_TRAINING:
+                        emotion_logits = out['emotion_logits']
+                        # Calculate emotion acc
+                        # running_acc = ...
+                        avg_emo_acc = running_acc / idx
+                        span_logits = out['span_logits']
+                        # Calculate span based metric?
+                    elif self.config.training_type == TrainingType.EMOTION_CLASSIFICATION:
+                        emotion_logits = out['emotion_logits']
+                        # Calculate emotion acc
+                        # runnning_acc = ...
+                        avg_emo_acc = running_acc / idx
+                    else:
+                        span_logits = out['span_logits']
+                        # Calculate span based metric?
+
+                    bar_string = f'Training {epoch}/{self.config.epochs} - Loss {avg_loss:.3f}'
+                    self.writer.add_scalar('Loss/train', avg_loss, global_step=global_step)
+                    if avg_emo_acc is not None:
+                        bar_string = f'{bar_string} - emo_acc: {avg_emo_acc:.3f}'
+                        self.writer.add_scalar('Loss/emo_acc', avg_emo_acc, global_step=global_step)
+
+                    global_step += 1
+
+                    bar.update()
+                    bar.set_description(bar_string)
+
+            self.optim_lr_scheduler.step()
+
+    def evaluate_task1(self):
         pass
