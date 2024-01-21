@@ -1,4 +1,5 @@
 import os
+import json
 from typing import Union, Type
 
 import torch
@@ -79,7 +80,7 @@ class Trainer:
 
         if config.solve_task == TaskSolve.TASK1:
             path = os.path.join(config.base_path, 'data', 'text')
-            tokenizer = self.model.module.tokenizer() if self.n_gpus > 1 else self.model.tokenizer()
+            tokenizer = self.model.tokenizer()
             train_dataset = EmotionCausalDataset(path, DatasetConfig.TRAIN, config.training_type, tokenizer,
                                                  device=self.device, seed=config.splitting_seed,
                                                  split=config.train_split_ratio)
@@ -123,7 +124,7 @@ class Trainer:
         param index: Loads the checkpoint based on created date index. Defaults to -1 to load the latest checkpoint.
         """
         save_path = os.path.join(self.config.base_path, self.config.model_save_path)
-        items = [os.path.join(save_path, item) for item in os.listdir(save_path)]
+        items = [os.path.join(save_path, item) for item in os.listdir(save_path) if '.pt' in item]
         if items:
             checkpoint_path = sorted(items, key=os.path.getctime)[index]
 
@@ -327,6 +328,10 @@ class Trainer:
                             self.writer.add_scalar('Loss/val', avg_loss, global_step)
                             self.writer.add_scalar('W_prop_F1/val', weighted_prop_f1, global_step)
                             global_step += 1
+
+                with open(f"validation_{epoch}.json", "w") as f:
+                    validation_logs = {f"results_{epoch}": results}
+                    json.dump(validation_logs, f, indent=4)
 
                 self.writer.flush()
                 results.clear()
