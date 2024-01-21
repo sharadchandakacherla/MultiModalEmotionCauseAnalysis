@@ -309,12 +309,15 @@ class Trainer:
                             results.extend(self._accumulate_results(processed_data_batch,
                                                                     pred_emotion_labels, pred_spans))
 
-                            _ = evaluate_runtime(results, og_data)
+                            _, metrics = evaluate_runtime(results, og_data)
+                            weighted_prop_f1 = metrics[2]
 
                             bar.update()
-                            bar.set_description(f'Val {epoch}/{self.config.epochs} - Loss {avg_loss:.3f}')
+                            bar.set_description(f'Val {epoch}/{self.config.epochs} - Loss {avg_loss:.3f} '
+                                                f'W. prop. F1 {weighted_prop_f1:.3f}')
 
                             self.writer.add_scalar('Loss/val', avg_loss, global_step)
+                            self.writer.add_scalar('W_prop_F1/val', weighted_prop_f1, global_step)
                             global_step += 1
 
                 self.writer.flush()

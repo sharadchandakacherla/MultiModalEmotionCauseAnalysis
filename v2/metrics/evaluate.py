@@ -2,13 +2,13 @@
 import sys, os, json, copy, string
 import numpy as np
 
-if len(sys.argv) > 1: 
+if len(sys.argv) > 1:
     [_, input_dir, output_dir] = sys.argv
 else:
     input_dir = './'
     output_dir = './'
 
-emotion_idx = dict(zip(['neutral','anger', 'disgust', 'fear', 'joy', 'sadness', 'surprise'], range(7)))
+emotion_idx = dict(zip(['neutral', 'anger', 'disgust', 'fear', 'joy', 'sadness', 'surprise'], range(7)))
 
 
 def get_json_data(json_file):
@@ -38,18 +38,20 @@ def get_span_position(span, utterance):
     cause_token = span.split()
     utterance_token = utterance.split()
     for wi in range(len(utterance_token)):
-        if (wi+len(cause_token))<=len(utterance_token) and utterance_token[wi:wi+len(cause_token)] == cause_token:
+        if (wi + len(cause_token)) <= len(utterance_token) and utterance_token[wi:wi + len(cause_token)] == cause_token:
             begin_id = wi
-            end_id = wi+len(cause_token)
+            end_id = wi + len(cause_token)
             break
-    return [begin_id, end_id] # start from 0, [begin_id, end_id)
+    return [begin_id, end_id]  # start from 0, [begin_id, end_id)
 
 
 '''
 Strict Match: emotion_utt and cause_utt are the same, and the cause spans completely match.
 Fuzzy Match: emotion_utt and cause_utt are the same, and the cause spans overlap
 '''
-def judge_cause_span_pair_emocate(pred_span_pair, true_spans_pos_dict, span_mode='fuzzy'): # strict/fuzzy
+
+
+def judge_cause_span_pair_emocate(pred_span_pair, true_spans_pos_dict, span_mode='fuzzy'):  # strict/fuzzy
     d_id, emo_id, cau_id, start_cur, end_cur, emo = pred_span_pair
     cur_key = 'dia{}_emoutt{}_causeutt{}'.format(d_id, emo_id, cau_id)
     if cur_key in true_spans_pos_dict:
@@ -59,15 +61,15 @@ def judge_cause_span_pair_emocate(pred_span_pair, true_spans_pos_dict, span_mode
                 return True
         else:
             for t_start, t_end, emo_y in true_spans_pos_dict[cur_key]:
-                if emo == emo_y and not(end_cur<=t_start or start_cur>=t_end):
-                    true_spans_pos_dict[cur_key].remove([t_start, t_end, emo_y]) 
+                if emo == emo_y and not (end_cur <= t_start or start_cur >= t_end):
+                    true_spans_pos_dict[cur_key].remove([t_start, t_end, emo_y])
                     return True
     return False
 
 
-def cal_prf_span_pair_emocate(span_pair_dict, pred_pairs, span_mode='strict'): 
-    conf_mat = np.zeros([7,7])
-    for p in pred_pairs: # [conv_id, emo_utt_id, cau_utt_id, span_start_id, span_end_id, emotion_category]
+def cal_prf_span_pair_emocate(span_pair_dict, pred_pairs, span_mode='strict'):
+    conf_mat = np.zeros([7, 7])
+    for p in pred_pairs:  # [conv_id, emo_utt_id, cau_utt_id, span_start_id, span_end_id, emotion_category]
         if judge_cause_span_pair_emocate(p, span_pair_dict, span_mode=span_mode):
             conf_mat[p[5]][p[5]] += 1
         else:
@@ -76,20 +78,20 @@ def cal_prf_span_pair_emocate(span_pair_dict, pred_pairs, span_mode='strict'):
         for p in v:
             conf_mat[p[2]][0] += 1
     # print(conf_mat)
-    p = np.diagonal(conf_mat / np.reshape(np.sum(conf_mat, axis = 0)+(1e-8), [1,7]))
-    r = np.diagonal(conf_mat / np.reshape(np.sum(conf_mat, axis = 1)+(1e-8), [7,1]))
-    f = 2*p*r/(p+r+(1e-8))
-    weight0 = np.sum(conf_mat, axis = 1)
+    p = np.diagonal(conf_mat / np.reshape(np.sum(conf_mat, axis=0) + (1e-8), [1, 7]))
+    r = np.diagonal(conf_mat / np.reshape(np.sum(conf_mat, axis=1) + (1e-8), [7, 1]))
+    f = 2 * p * r / (p + r + (1e-8))
+    weight0 = np.sum(conf_mat, axis=1)
     weight = weight0[1:] / np.sum(weight0[1:])
     w_avg_p = np.sum(p[1:] * weight)
     w_avg_r = np.sum(r[1:] * weight)
     w_avg_f1 = np.sum(f[1:] * weight)
-    
+
     micro_acc = np.sum(np.diagonal(conf_mat)[1:])
-    micro_p = micro_acc / (sum(np.sum(conf_mat, axis = 0)[1:])+(1e-8))
-    micro_r = micro_acc / (sum(np.sum(conf_mat, axis = 1)[1:])+(1e-8))
-    micro_f1 = 2*micro_p*micro_r/(micro_p+micro_r+1e-8)
-    
+    micro_p = micro_acc / (sum(np.sum(conf_mat, axis=0)[1:]) + (1e-8))
+    micro_r = micro_acc / (sum(np.sum(conf_mat, axis=1)[1:]) + (1e-8))
+    micro_f1 = 2 * micro_p * micro_r / (micro_p + micro_r + 1e-8)
+
     return [w_avg_p, w_avg_r, w_avg_f1, micro_p, micro_r, micro_f1]
 
 
@@ -97,7 +99,7 @@ def get_match_scores(pred_span, true_spans):
     match_id, match_gold_length, match_length, match_score = 0, 0, 0, 0
     p_start, p_end, p_emo = pred_span
     for ii, (t_start, t_end, t_emo) in enumerate(true_spans):
-        if p_emo == t_emo and not (p_end<=t_start or p_start>=t_end):
+        if p_emo == t_emo and not (p_end <= t_start or p_start >= t_end):
             cur_match_length = min(p_end, t_end) - max(p_start, t_start)
             cur_gold_length = t_end - t_start
             cur_match_score = cur_match_length / float(cur_gold_length)
@@ -118,8 +120,12 @@ def get_match_scores(pred_span, true_spans):
 '''
 Proportional Match (span): Each predicted span is compared with all golden spans, and determine which golden span it matches based on the overlap ratio (match score). Then the Precision, Recall, and F1 are calculated based on the overlapping tokens.
 '''
-def cal_prf_span_pair_emocate_proportional(true_span_pair_dict, pred_span_pair_dict): # 'dia{}_emoutt{}_causeutt{}': [[span_start_id, span_end_id, emotion_category], ...]
-    prf_mat = np.zeros([7,5]) # row: emotion category; col: correct_num, true_num, pred_num, matched_true_span_num, true_span_num
+
+
+def cal_prf_span_pair_emocate_proportional(true_span_pair_dict,
+                                           pred_span_pair_dict):  # 'dia{}_emoutt{}_causeutt{}': [[span_start_id, span_end_id, emotion_category], ...]
+    prf_mat = np.zeros(
+        [7, 5])  # row: emotion category; col: correct_num, true_num, pred_num, matched_true_span_num, true_span_num
     true_span_pair_dict_copy = copy.deepcopy(true_span_pair_dict)
     for k, v in pred_span_pair_dict.items():
         for pred_span in v:
@@ -129,11 +135,12 @@ def cal_prf_span_pair_emocate_proportional(true_span_pair_dict, pred_span_pair_d
                 match_id, match_gold_length, match_length, match_score = get_match_scores(pred_span, true_spans)
                 if match_length > 0:
                     prf_mat[pred_span[2]][0] += match_length
-                    prf_mat[pred_span[2]][1] += match_gold_length # Multiple predicted spans may match the same golden span.
+                    prf_mat[pred_span[2]][
+                        1] += match_gold_length  # Multiple predicted spans may match the same golden span.
                     prf_mat[pred_span[2]][3] += 1
                     if true_spans[match_id] in true_span_pair_dict_copy[k]:
                         true_span_pair_dict_copy[k].remove(true_spans[match_id])
-    
+
     for k, v in true_span_pair_dict_copy.items():
         for true_span in v:
             prf_mat[true_span[2]][1] += true_span[1] - true_span[0]
@@ -141,19 +148,19 @@ def cal_prf_span_pair_emocate_proportional(true_span_pair_dict, pred_span_pair_d
     for k, v in true_span_pair_dict.items():
         for true_span in v:
             prf_mat[true_span[2]][4] += 1
-    
-    p_scores = prf_mat[1:,0] / (prf_mat[1:,2]+(1e-8))
-    r_scores = prf_mat[1:,0] / (prf_mat[1:,1]+(1e-8))
-    f1_scores = 2*p_scores*r_scores/(p_scores+r_scores+(1e-8))
-    weight = prf_mat[1:,4] / sum(prf_mat[1:,4]) # Calculate the weight based on the actual number of golden spans.
-    w_avg_p = sum(p_scores*weight)
-    w_avg_r = sum(r_scores*weight)
-    w_avg_f1 = sum(f1_scores*weight)
 
-    total_correct = sum(prf_mat[1:,0])
-    micro_p = total_correct / (sum(prf_mat[1:,2])+(1e-8))
-    micro_r = total_correct / (sum(prf_mat[1:,1])+(1e-8))
-    micro_f1 = 2*micro_p*micro_r/(micro_p+micro_r+1e-8)
+    p_scores = prf_mat[1:, 0] / (prf_mat[1:, 2] + (1e-8))
+    r_scores = prf_mat[1:, 0] / (prf_mat[1:, 1] + (1e-8))
+    f1_scores = 2 * p_scores * r_scores / (p_scores + r_scores + (1e-8))
+    weight = prf_mat[1:, 4] / sum(prf_mat[1:, 4])  # Calculate the weight based on the actual number of golden spans.
+    w_avg_p = sum(p_scores * weight)
+    w_avg_r = sum(r_scores * weight)
+    w_avg_f1 = sum(f1_scores * weight)
+
+    total_correct = sum(prf_mat[1:, 0])
+    micro_p = total_correct / (sum(prf_mat[1:, 2]) + (1e-8))
+    micro_r = total_correct / (sum(prf_mat[1:, 1]) + (1e-8))
+    micro_f1 = 2 * micro_p * micro_r / (micro_p + micro_r + 1e-8)
 
     return [w_avg_p, w_avg_r, w_avg_f1, micro_p, micro_r, micro_f1]
 
@@ -182,22 +189,22 @@ def has_letter(text):
 def evaluate_1_2(pred_data, gold_data):
     gold_data_dict = convert_list_to_dict(gold_data, main_key="conversation_ID")
     pred_data_dict = convert_list_to_dict(pred_data, main_key="conversation_ID")
-    
+
     pred_pairs, true_pairs = [], []
     conv_context_dict = {}
     counter = 0
-    for id, ins in gold_data_dict.items(): # The public evaluation data may contain some interference data that is not used for evaluation.
+    for id, ins in gold_data_dict.items():  # The public evaluation data may contain some interference data that is not used for evaluation.
         if id not in pred_data_dict:
             continue
             sys.exit('Conversation {} are missing!'.format(id))
         else:
-            counter+=1
+            counter += 1
             pred = pred_data_dict[id]
             all_utterances = [x["text"] for x in ins["conversation"]]
             conv_context_dict[id] = all_utterances
-            
+
             def get_new_pair_list(span_pair_list, pred=False):
-                new_span_pair_list  = []
+                new_span_pair_list = []
                 for x in span_pair_list:
                     if not isinstance(x, list):
                         sys.exit('emotion-cause_pairs format error!')
@@ -210,10 +217,11 @@ def evaluate_1_2(pred_data, gold_data):
                                 sys.exit('Unknown emotion category!')
                             else:
                                 if 'U' in emo_id:
-                                    emo_id = emo_id.replace('U','')
+                                    emo_id = emo_id.replace('U', '')
                                 if pred:
                                     if has_letter(x[1]):
-                                        sys.exit('emotion-cause_pairs format error! You should provide the position index range of the cause span, not the text itself.')
+                                        sys.exit(
+                                            'emotion-cause_pairs format error! You should provide the position index range of the cause span, not the text itself.')
                                     else:
                                         cause_info = x[1].split('_')
                                         if len(cause_info) != 3:
@@ -221,24 +229,24 @@ def evaluate_1_2(pred_data, gold_data):
                                         else:
                                             cause_id, span_start_id, span_end_id = cause_info
                                             if 'U' in cause_id:
-                                                cause_id = cause_id.replace('U','')
+                                                cause_id = cause_id.replace('U', '')
                                             span_idx_list = [int(span_start_id), int(span_end_id)]
                                 else:
                                     cause_id, cur_span = x[1].split('_')
                                     if 'U' in cause_id:
-                                        cause_id = cause_id.replace('U','')
+                                        cause_id = cause_id.replace('U', '')
                                     cur_span = clean_span(cur_span)
-                                    span_idx_list = get_span_position(cur_span, all_utterances[int(cause_id)-1])
-                                
+                                    span_idx_list = get_span_position(cur_span, all_utterances[int(cause_id) - 1])
+
                                 new_pair = [id, int(emo_id), int(cause_id)] + span_idx_list + [emotion_idx[emotion]]
                                 # print(new_pair)
                                 # sys.exit("blah")
                                 if new_pair not in new_span_pair_list:
                                     new_span_pair_list.append(new_pair)
-                return new_span_pair_list # [[conv_id, emo_utt_id, cau_utt_id, span_start_id, span_end_id, emotion_category], ...]
+                return new_span_pair_list  # [[conv_id, emo_utt_id, cau_utt_id, span_start_id, span_end_id, emotion_category], ...]
 
-            true_pairs.extend(get_new_pair_list(ins["emotion-cause_pairs"])) # 
-            #print(f'adding spans for convid {id} count true : {len(ins["emotion-cause_pairs"])} count : {len(true_pairs)} \n')
+            true_pairs.extend(get_new_pair_list(ins["emotion-cause_pairs"]))  #
+            # print(f'adding spans for convid {id} count true : {len(ins["emotion-cause_pairs"])} count : {len(true_pairs)} \n')
             if "emotion-cause_pairs" not in pred:
                 sys.exit("Cannot find the key 'emotion-cause_pairs'!")
             else:
@@ -246,7 +254,7 @@ def evaluate_1_2(pred_data, gold_data):
 
     # print(f'adding spans for convid {id} count true : {len(true_pairs)} pred count : {len(pred_pairs)} \n')
     print(counter)
-    
+
     def get_span_pair_dict(pairs):
         span_pair_dict = {}
         for p in pairs:
@@ -256,10 +264,10 @@ def evaluate_1_2(pred_data, gold_data):
             else:
                 span_pair_dict[cur_key] = [p[3:]]
         return span_pair_dict
-    
+
     true_span_pair_dict = get_span_pair_dict(true_pairs)
     pred_span_pair_dict = get_span_pair_dict(pred_pairs)
-    
+
     true_span_pair_dict_copy = copy.deepcopy(true_span_pair_dict)
     score_list = cal_prf_span_pair_emocate(true_span_pair_dict, pred_pairs, span_mode='strict')
     score_list_2 = cal_prf_span_pair_emocate_proportional(true_span_pair_dict_copy, pred_span_pair_dict)
@@ -267,7 +275,7 @@ def evaluate_1_2(pred_data, gold_data):
 
 
 def cal_prf_pair_emocate(true_pairs, pred_pairs):
-    conf_mat = np.zeros([7,7])
+    conf_mat = np.zeros([7, 7])
     for p in pred_pairs:
         if p in true_pairs:
             conf_mat[p[3]][p[3]] += 1
@@ -276,43 +284,44 @@ def cal_prf_pair_emocate(true_pairs, pred_pairs):
     for p in true_pairs:
         if p not in pred_pairs:
             conf_mat[p[3]][0] += 1
-    p = np.diagonal(conf_mat / np.reshape(np.sum(conf_mat, axis = 0)+(1e-8), [1,7]))
-    r = np.diagonal(conf_mat / np.reshape(np.sum(conf_mat, axis = 1)+(1e-8), [7,1]))
-    f = 2*p*r/(p+r+(1e-8))
-    weight0 = np.sum(conf_mat, axis = 1)
+    p = np.diagonal(conf_mat / np.reshape(np.sum(conf_mat, axis=0) + (1e-8), [1, 7]))
+    r = np.diagonal(conf_mat / np.reshape(np.sum(conf_mat, axis=1) + (1e-8), [7, 1]))
+    f = 2 * p * r / (p + r + (1e-8))
+    weight0 = np.sum(conf_mat, axis=1)
     weight = weight0[1:] / np.sum(weight0[1:])
     w_avg_p = np.sum(p[1:] * weight)
     w_avg_r = np.sum(r[1:] * weight)
     w_avg_f1 = np.sum(f[1:] * weight)
-    
+
     micro_acc = np.sum(np.diagonal(conf_mat)[1:])
-    micro_p = micro_acc / (sum(np.sum(conf_mat, axis = 0)[1:])+(1e-8))
-    micro_r = micro_acc / (sum(np.sum(conf_mat, axis = 1)[1:])+(1e-8))
-    micro_f1 = 2*micro_p*micro_r/(micro_p+micro_r+1e-8)
-    
+    micro_p = micro_acc / (sum(np.sum(conf_mat, axis=0)[1:]) + (1e-8))
+    micro_r = micro_acc / (sum(np.sum(conf_mat, axis=1)[1:]) + (1e-8))
+    micro_f1 = 2 * micro_p * micro_r / (micro_p + micro_r + 1e-8)
+
     results = [micro_p, micro_r, micro_f1, w_avg_p, w_avg_r, w_avg_f1]
     return results
+
 
 def evaluate_2_2(pred_data, gold_data):
     gold_data_dict = convert_list_to_dict(gold_data, main_key="conversation_ID")
     pred_data_dict = convert_list_to_dict(pred_data, main_key="conversation_ID")
-    
+
     pred_pairs, true_pairs = [], []
     for id, ins in gold_data_dict.items():
         if id not in pred_data_dict:
             sys.exit('Conversation {} are missing!'.format(id))
         else:
             pred = pred_data_dict[id]
-            
+
             def get_new_pair(pair_scores):
                 emo_id, emotion = pair_scores[0].split('_')
                 if emotion not in emotion_idx:
                     sys.exit('Unknown emotion category!')
                 else:
                     if 'U' in emo_id:
-                        emo_id = emo_id.replace('U','')
+                        emo_id = emo_id.replace('U', '')
                     return [id, int(emo_id), int(pair_scores[1]), emotion_idx[emotion]]
-            
+
             for p in ins["emotion-cause_pairs"]:
                 new_pair = get_new_pair(p)
                 if new_pair not in true_pairs:
@@ -325,96 +334,94 @@ def evaluate_2_2(pred_data, gold_data):
                     new_pair = get_new_pair(p)
                     if new_pair not in pred_pairs:
                         pred_pairs.append(new_pair)
-    
+
     all_results_emocate = cal_prf_pair_emocate(true_pairs, pred_pairs)
     return all_results_emocate
 
+
 def pred_mapper(results, gold_data_dict_filtered):
-        # each results looks like this
-        # [
-        #     {
-        #         "conversation_ID": "sceneid",
-        #         "utterance_ID": "U_i",
-        #         "gold_emotion": "goldlabelofU_i",
-        #         "predicted_emotion": "pred_label",
-        #         "compared_utterance_ID": "U_j",
-        #         "indices_compared_utterance": [
-        #             "start_index_predicted",
-        #             "end_index_predicted"
-        #         ],
-        #         "gold_indices": [
-        #             "start_index_predicted",
-        #             "end_index_predicted"
-        #         ]
-        #     }
-        # ]
-        # how each should look
-        # {
-        #     "conversation_ID": 2,
-        #     "conversation": [
-        #         {
-        #             "utterance_ID": 1,
-        #             "text": "I do not want to be single , okay ? I just ... I just ... I just wanna be married again !",
-        #             "speaker": "Ross"
-        #         },
-        #         {
-        #             "utterance_ID": 2,
-        #             "text": "And I just want a million dollars !",
-        #             "speaker": "Chandler"
-        #         },
-        #         {
-        #             "utterance_ID": 3,
-        #             "text": "Rachel ? !",
-        #             "speaker": "Monica"
-        #         }
-        #     ],
-        #     "emotion-cause_pairs": [
-        #         [
-        #             "1_sadness",
-        #             "1_0_22"
-        #         ],
-        #         [
-        #             "3_surprise",
-        #             "3_0_1"
-        #         ]
-        #     ]
-        # }
+    # each results looks like this
+    # [
+    #     {
+    #         "conversation_ID": "sceneid",
+    #         "utterance_ID": "U_i",
+    #         "gold_emotion": "goldlabelofU_i",
+    #         "predicted_emotion": "pred_label",
+    #         "compared_utterance_ID": "U_j",
+    #         "indices_compared_utterance": [
+    #             "start_index_predicted",
+    #             "end_index_predicted"
+    #         ],
+    #         "gold_indices": [
+    #             "start_index_predicted",
+    #             "end_index_predicted"
+    #         ]
+    #     }
+    # ]
+    # how each should look
+    # {
+    #     "conversation_ID": 2,
+    #     "conversation": [
+    #         {
+    #             "utterance_ID": 1,
+    #             "text": "I do not want to be single , okay ? I just ... I just ... I just wanna be married again !",
+    #             "speaker": "Ross"
+    #         },
+    #         {
+    #             "utterance_ID": 2,
+    #             "text": "And I just want a million dollars !",
+    #             "speaker": "Chandler"
+    #         },
+    #         {
+    #             "utterance_ID": 3,
+    #             "text": "Rachel ? !",
+    #             "speaker": "Monica"
+    #         }
+    #     ],
+    #     "emotion-cause_pairs": [
+    #         [
+    #             "1_sadness",
+    #             "1_0_22"
+    #         ],
+    #         [
+    #             "3_surprise",
+    #             "3_0_1"
+    #         ]
+    #     ]
+    # }
     mapped_preds = []
     flat_map_preds = {}
     for result in results:
-            convid = result["conversation_ID"]
-            if convid not in flat_map_preds:
-                flat_map_preds[convid] = []
+        convid = result["conversation_ID"]
+        if convid not in flat_map_preds:
+            flat_map_preds[convid] = []
     for result in results:
         convid = result["conversation_ID"]
         u_i = result["utterance_ID"]
         u_j = result["compared_utterance_ID"]
         emotion = result["predicted_emotion"]
-        utt_j = gold_data_dict_filtered[convid]["conversation"][u_j-1]['text']
+        utt_j = gold_data_dict_filtered[convid]["conversation"][u_j - 1]['text']
 
         pred_text = result['predicted_text']
         start_index = utt_j.find(result['predicted_text'])
         if start_index == -1:
             continue
-        #TODO
-        # 1. length callculation subject to label being found
 
         end_index = start_index + len(pred_text)
         if convid in flat_map_preds:
-            flat_map_preds[convid].append([f'{u_i}_{emotion}',f'{u_j}_{start_index}_{end_index}'])
-
-
+            flat_map_preds[convid].append([f'{u_i}_{emotion}', f'{u_j}_{start_index}_{end_index}'])
 
     for key, values in flat_map_preds.items():
         mapped_preds_obj = {}
         mapped_preds_obj['emotion-cause_pairs'] = []
         mapped_preds_obj['conversation_ID'] = key
         mapped_preds_obj['conversation'] = gold_data_dict_filtered[key]["conversation"]
-        mapped_preds_obj['emotion-cause_pairs']=values
+        mapped_preds_obj['emotion-cause_pairs'] = values
         mapped_preds.append(mapped_preds_obj)
     return mapped_preds
 
-def evaluate_runtime(results, data):
+
+def evaluate_runtime(results: list, data: dict):
     conversation_IDs = set([x['conversation_ID'] for x in results])
     gold_data_dict = convert_list_to_dict(data, main_key="conversation_ID")
     gold_data_dict_filtered = {k: data[k - 1] for k in conversation_IDs if k in gold_data_dict}
@@ -503,12 +510,13 @@ def evaluate_runtime(results, data):
     score_list_2 = cal_prf_span_pair_emocate_proportional(true_span_pair_dict_copy, pred_span_pair_dict)
     return score_list, score_list_2
 
+
 def main():
     output_file = open(os.path.join(output_dir, 'scores.txt'), 'w')
     subtask_name_list = ['Subtask_1']
     participate_subtask_num = 0
     for subtask_name in subtask_name_list:
-        if len(sys.argv) > 1: 
+        if len(sys.argv) > 1:
             gold_file = os.path.join(input_dir, 'ref', '{}_gold.json'.format(subtask_name))
             pred_file = os.path.join(input_dir, 'res', '{}_pred.json'.format(subtask_name))
         else:
@@ -542,29 +550,29 @@ def main():
                 score_list, score_list_1 = evaluate_runtime(results, gold_data)
                 output_file.write("weighted_strict_precision:{}\n".format(score_list[0]))
                 output_file.write("weighted_strict_recall:{}\n".format(score_list[1]))
-                output_file.write("weighted_strict_f1:{}\n".format(score_list[2])) 
+                output_file.write("weighted_strict_f1:{}\n".format(score_list[2]))
                 output_file.write("weighted_Proportional_precision:{}\n".format(score_list_1[0]))
                 output_file.write("weighted_Proportional_recall:{}\n".format(score_list_1[1]))
-                output_file.write("weighted_Proportional_f1:{}\n".format(score_list_1[2])) 
-                
+                output_file.write("weighted_Proportional_f1:{}\n".format(score_list_1[2]))
+
                 output_file.write("strict_precision:{}\n".format(score_list[3]))
                 output_file.write("strict_recall:{}\n".format(score_list[4]))
-                output_file.write("strict_f1:{}\n".format(score_list[5])) 
+                output_file.write("strict_f1:{}\n".format(score_list[5]))
                 output_file.write("Proportional_precision:{}\n".format(score_list_1[3]))
                 output_file.write("Proportional_recall:{}\n".format(score_list_1[4]))
-                output_file.write("Proportional_f1:{}\n".format(score_list_1[5])) 
-                
+                output_file.write("Proportional_f1:{}\n".format(score_list_1[5]))
+
             if 'Subtask_2' in subtask_name:
                 score_list = evaluate_2_2(pred_data, gold_data)
                 output_file.write("precision_pair:{}\n".format(score_list[0]))
                 output_file.write("recall_pair:{}\n".format(score_list[1]))
-                output_file.write("f1_pair:{}\n".format(score_list[2])) 
+                output_file.write("f1_pair:{}\n".format(score_list[2]))
                 output_file.write("weighted_precision:{}\n".format(score_list[3]))
                 output_file.write("weighted_recall:{}\n".format(score_list[4]))
-                output_file.write("weighted_f1:{}\n".format(score_list[5])) 
-            
+                output_file.write("weighted_f1:{}\n".format(score_list[5]))
+
     if participate_subtask_num == 0:
-        sys.exit('Could not find valid json file in your zip package!')   
+        sys.exit('Could not find valid json file in your zip package!')
 
 
 if __name__ == "__main__":
