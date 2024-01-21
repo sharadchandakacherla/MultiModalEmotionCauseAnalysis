@@ -42,6 +42,7 @@ class EmotionCausalDataset(Dataset):
             "surprise": 5,
             "neutral": 6
         }
+        self.rev_emotion_labels = {v: k for k, v in self.emotion_labels.items()}
 
         if self._config != DatasetConfig.TEST:
             with open(os.path.join(self.path, 'Subtask_1_train.json')) as f:
@@ -224,7 +225,7 @@ class EmotionCausalDataset(Dataset):
         labels = {**emotion_label, **causal_span_label}
         labels = {k: v.to(self.device) for k, v in labels.items()}
 
-        return tokenized_inp, labels
+        return tokenized_inp, labels, item
 
 
 def find_nth_occurrence(haystack, needle, n=2):

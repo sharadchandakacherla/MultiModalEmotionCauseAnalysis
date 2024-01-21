@@ -171,6 +171,47 @@ class Trainer:
 
         return dataloader
 
+    def _extract_spans(self, span_logits: torch.Tensor, text_inp: dict) -> list:
+        start_span_logit, end_span_logit = (x.squeeze(-1).contiguous() for x in span_logits.split(1, dim=-1))
+        start_span_idx = start_span_logit.argmax(-1)
+        end_span_idx = end_span_logit.argmax(-1)
+
+        text_span_mask = torch.zeros_like(text_inp['input_ids'])
+        for batch_idx, (start_idx, end_idx) in enumerate(zip(start_span_idx, end_span_idx)):
+            text_span_mask[batch_idx, start_idx: end_idx + 1] = 1.0
+
+        pred_spans = self.model.tokenizer.batch_decode(text_span_mask, skip_special_tokens=True)
+
+        return pred_spans
+
+    def _extract_emotion_logits(self, emotion_logits: torch.Tensor) -> list:
+        rev_emotion_label_map = self.val_dataloader.dataset.rev_emotion_labels
+        emotion_idx = emotion_logits.argmax(-1)
+
+        pred_emotion_labels = [rev_emotion_label_map[idx] for idx in emotion_idx]
+
+        return pred_emotion_labels
+
+    @staticmethod
+    def _accumulate_results(og_data: list, pred_emotion_labels: list, pred_spans: list) -> list:
+        results = []
+
+        for idx, data in enumerate(og_data):
+            pred_emotion_label = pred_emotion_labels[idx]
+            pred_span = pred_spans[idx] if pred_spans else ''
+
+            results.append({
+                'conversation_ID': data['conversation_id'],
+                'utterance_ID': data['utterance_id_i'],
+                'gold_emotion': data['emotion'],
+                'predicted_emotion': pred_emotion_label,
+                'compared_utterance_ID': data.get('utterance_id_j', -1),
+                'predicted_text': pred_span,
+                'gold_text':  data.get('causal_span', '')
+            })
+
+        return results
+
     def train_task1(self):
         running_loss, running_acc = 0.0, 0.0
         disable_tqdm = self.rank != 0
@@ -184,7 +225,7 @@ class Trainer:
 
             global_step = (epoch - 1) * len(self.train_dataloader)
             with tqdm(total=len(self.train_dataloader), colour='cyan', leave=False, disable=disable_tqdm) as bar:
-                for idx, (inp, labels) in enumerate(self.train_dataloader, start=1):
+                for idx, (inp, labels, _) in enumerate(self.train_dataloader, start=1):
                     self.optim.zero_grad()
 
                     out = self.model(inp, labels)
@@ -199,19 +240,20 @@ class Trainer:
 
                     # TODO: Evaluate metrics.
                     if self.config.training_type == TrainingType.JOINT_TRAINING:
-                        emotion_logits = out['emotion_logits']
+                        # emotion_logits = out['emotion_logits']
                         # Calculate emotion acc
                         # running_acc = ...
                         avg_emo_acc = running_acc / idx
-                        span_logits = out['span_logits']
+                        # span_logits = out['span_logits']
                         # Calculate span based metric?
                     elif self.config.training_type == TrainingType.EMOTION_CLASSIFICATION:
-                        emotion_logits = out['emotion_logits']
+                        # emotion_logits = out['emotion_logits']
                         # Calculate emotion acc
                         # runnning_acc = ...
                         avg_emo_acc = running_acc / idx
                     else:
-                        span_logits = out['span_logits']
+                        pass
+                        # span_logits = out['span_logits']
                         # Calculate span based metric?
 
                     if self.rank == 0:
@@ -245,14 +287,16 @@ class Trainer:
                 # reset metrics for validation.
                 self.model.eval()
                 running_loss, running_acc = 0.0, 0.0
+                results = []
 
                 if self.n_gpus > 0:
                     torch.cuda.empty_cache()
 
                 global_step = (epoch - 1) * len(self.val_dataloader)
+                processed_data = self.val_dataloader.dataset.processed_data
 
                 with tqdm(total=len(self.val_dataloader), colour='red', leave=False) as bar:
-                    for idx, (inp, labels) in enumerate(self.val_dataloader, start=1):
+                    for idx, (inp, labels, dataset_idx) in enumerate(self.val_dataloader, start=1):
                         with torch.no_grad():
                             out = self.model(inp, labels)
                             loss = out['loss']
@@ -260,7 +304,25 @@ class Trainer:
                             running_loss += loss.item()
                             avg_loss = running_loss / idx
 
-                            # TODO: Do decoding...
+                            pred_spans = []
+                            pred_emotion_labels = []
+                            og_data = [processed_data[idx] for idx in dataset_idx]
+
+                            if self.config.training_type == TrainingType.JOINT_TRAINING:
+                                emotion_logits = out['emotion_logits']
+                                span_logits = out['span_logits']
+
+                                pred_spans = self._extract_spans(span_logits=span_logits, text_inp=inp)
+                                pred_emotion_labels = self._extract_emotion_logits(emotion_logits=emotion_logits)
+
+                            elif self.config.training_type == TrainingType.EMOTION_CLASSIFICATION:
+                                emotion_logits = out['emotion_logits']
+                                pred_emotion_labels = self._extract_emotion_logits(emotion_logits=emotion_logits)
+                            else:
+                                span_logits = out['span_logits']
+                                pred_spans = self._extract_spans(span_logits=span_logits, text_inp=inp)
+
+                            results.extend(self._accumulate_results(og_data, pred_emotion_labels, pred_spans))
 
                             bar.update()
                             bar.set_description(f'Val {epoch}/{self.config.epochs} - Loss {avg_loss:.3f}')
@@ -269,6 +331,7 @@ class Trainer:
                             global_step += 1
 
                 self.writer.flush()
+                results.clear()
 
             if self.n_gpus > 0:
                 torch.cuda.empty_cache()
