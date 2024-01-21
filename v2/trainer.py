@@ -138,7 +138,11 @@ class Trainer:
             checkpoint_path = sorted(items, key=os.path.getctime)[index]
 
             checkpoint = torch.load(checkpoint_path, map_location=self.device)
-            self.model.load_state_dict(checkpoint['model'], strict=True)
+
+            if self.n_gpus > 1:
+                self.model.module.load_state_dict(checkpoint['model'], strict=True)
+            else:
+                self.model.load_state_dict(checkpoint['model'], strict=True)
 
             self.model.train()
             self.optim.load_state_dict(checkpoint['optim'])
@@ -262,7 +266,7 @@ class Trainer:
                         if self.config.training_type == TrainingType.EMOTION_CLASSIFICATION:
                             avg_emo_acc = running_acc / idx
                             bar_string = f'{bar_string} - emo_acc: {avg_emo_acc:.3f}'
-                            self.writer.add_scalar('Loss/emo_acc', avg_emo_acc, global_step=global_step)
+                            self.writer.add_scalar('Emo_acc/train', avg_emo_acc, global_step=global_step)
 
                         bar.update()
                         bar.set_description(bar_string)
@@ -293,14 +297,18 @@ class Trainer:
                 if self.n_gpus > 0:
                     torch.cuda.empty_cache()
 
-                global_step = (epoch - 1) * len(self.val_dataloader)
+                n_val = len(self.val_dataloader)
+
+                global_step = (epoch - 1) * n_val
                 processed_data = self.val_dataloader.dataset.processed_data
                 og_data = self.val_dataloader.dataset.data
 
-                with tqdm(total=len(self.val_dataloader), colour='red', leave=True) as bar:
+                model = self.model.module if self.n_gpus > 1 else self.model
+
+                with tqdm(total=n_val, colour='red', leave=True) as bar:
                     for idx, (inp, labels, dataset_idx) in enumerate(self.val_dataloader, start=1):
                         with torch.no_grad():
-                            out = self.model(inp, labels)
+                            out = model(inp, labels)
                             loss = out['loss']
 
                             running_loss += loss.item()
