@@ -106,17 +106,18 @@ class Trainer:
         self.writer = SummaryWriter(log_dir=os.path.join(config.base_path, config.model_log_path)) \
             if self.rank == 0 else None
 
-        total_steps = config.epochs * len(self.train_dataloader)
-
-        self.optim = AdamW(self.model.parameters(), lr=config.lr)
-        # https://stackoverflow.com/a/61558319
-        warmup_steps = int(0.1 * len(self.train_dataloader))
-        self.optim_lr_scheduler = get_cosine_schedule_with_warmup(self.optim, num_warmup_steps=warmup_steps,
-                                                                  num_training_steps=total_steps)
-
-        self._load_model_state()
+        # total_steps = config.epochs * len(self.train_dataloader)
+        #
+        # self.optim = AdamW(self.model.parameters(), lr=config.lr)
+        # # https://stackoverflow.com/a/61558319
+        # warmup_steps = int(0.1 * len(self.train_dataloader))
+        # self.optim_lr_scheduler = get_cosine_schedule_with_warmup(self.optim, num_warmup_steps=warmup_steps,
+        #                                                           num_training_steps=total_steps)
+        #
+        # self._load_model_state()
 
         self.model = self._map_model_to_device()
+        self._load_model_state()
 
     def _load_model_state(self, index=-1):
         """
@@ -125,6 +126,14 @@ class Trainer:
         """
         save_path = os.path.join(self.config.base_path, self.config.model_save_path)
         items = [os.path.join(save_path, item) for item in os.listdir(save_path) if '.pt' in item]
+
+        total_steps = self.config.epochs * len(self.train_dataloader)
+        # https://stackoverflow.com/a/61558319
+        self.optim = AdamW(self.model.parameters(), lr=self.config.lr)
+        warmup_steps = int(0.1 * len(self.train_dataloader))
+        self.optim_lr_scheduler = get_cosine_schedule_with_warmup(self.optim, num_warmup_steps=warmup_steps,
+                                                                  num_training_steps=total_steps)
+
         if items:
             checkpoint_path = sorted(items, key=os.path.getctime)[index]
 
@@ -234,7 +243,7 @@ class Trainer:
             self.model.train()
 
             global_step = (epoch - 1) * len(self.train_dataloader)
-            with tqdm(total=len(self.train_dataloader), colour='cyan', leave=False, disable=disable_tqdm) as bar:
+            with tqdm(total=len(self.train_dataloader), colour='cyan', leave=True, disable=disable_tqdm) as bar:
                 for idx, (inp, labels, _) in enumerate(self.train_dataloader, start=1):
                     self.optim.zero_grad()
 
@@ -288,7 +297,7 @@ class Trainer:
                 processed_data = self.val_dataloader.dataset.processed_data
                 og_data = self.val_dataloader.dataset.data
 
-                with tqdm(total=len(self.val_dataloader), colour='red', leave=False) as bar:
+                with tqdm(total=len(self.val_dataloader), colour='red', leave=True) as bar:
                     for idx, (inp, labels, dataset_idx) in enumerate(self.val_dataloader, start=1):
                         with torch.no_grad():
                             out = self.model(inp, labels)
