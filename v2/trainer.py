@@ -15,7 +15,7 @@ from tqdm import tqdm
 from config import TrainerConfig, TrainingType, TaskSolve
 from dataset import DatasetConfig, EmotionCausalDataset
 from models import ModelBaseClass, JointModel, EmotionClassification, SpanClassification
-from v2.metrics.evaluate import evaluate_runtime
+from metrics.evaluate import evaluate_runtime
 
 
 def select_model(training_type: TrainingType, solve_task: TaskSolve) -> Union[None, Type[ModelBaseClass]]:
@@ -74,11 +74,12 @@ class Trainer:
         if config.freeze_base_model:
             self.model.freeze_base_model()
 
-        self.model = self._map_model_to_device()
+        if self.n_gpus > 1:
+            setup(self.rank, self.n_gpus)
 
         if config.solve_task == TaskSolve.TASK1:
             path = os.path.join(config.base_path, 'data', 'text')
-            tokenizer = self.model.tokenizer()
+            tokenizer = self.model.module.tokenizer() if self.n_gpus > 1 else self.model.tokenizer()
             train_dataset = EmotionCausalDataset(path, DatasetConfig.TRAIN, config.training_type, tokenizer,
                                                  device=self.device, seed=config.splitting_seed,
                                                  split=config.train_split_ratio)
@@ -113,6 +114,8 @@ class Trainer:
                                                                   num_training_steps=total_steps)
 
         self._load_model_state()
+
+        self.model = self._map_model_to_device()
 
     def _load_model_state(self, index=-1):
         """
@@ -161,7 +164,6 @@ class Trainer:
         sampler = None
 
         if self.config.multi_gpu and for_training:
-            setup(self.rank, self.n_gpus)
             sampler = DistributedSampler(dataset, num_replicas=self.n_gpus, rank=self.rank,
                                          seed=self.config.splitting_seed, shuffle=shuffle)
             # Sampler cannot be applied with Shuffle with True.
@@ -174,14 +176,20 @@ class Trainer:
 
     def _extract_spans(self, span_logits: torch.Tensor, text_inp: dict) -> list:
         start_span_logit, end_span_logit = (x.squeeze(-1).contiguous() for x in span_logits.split(1, dim=-1))
-        start_span_idx = start_span_logit.argmax(-1)
-        end_span_idx = end_span_logit.argmax(-1)
+        start_span_idx = start_span_logit.argmax(-1).tolist()
+        end_span_idx = end_span_logit.argmax(-1).tolist()
 
-        text_span_mask = torch.zeros_like(text_inp['input_ids'])
+        text = text_inp['input_ids']
+
+        mask = torch.zeros_like(text)
         for batch_idx, (start_idx, end_idx) in enumerate(zip(start_span_idx, end_span_idx)):
-            text_span_mask[batch_idx, start_idx: end_idx + 1] = 1.0
+            mask[batch_idx, start_idx: end_idx + 1] = 1.0
 
-        pred_spans = self.model.tokenizer.batch_decode(text_span_mask, skip_special_tokens=True)
+        masked_text_span = text * mask
+
+        tokenizer = self.model.module.tokenizer() if self.n_gpus > 1 else self.model.tokenizer()
+        pred_spans = tokenizer.batch_decode(masked_text_span, skip_special_tokens=True)
+        pred_spans = [span.replace(" ##", "").replace("##", "") for span in pred_spans]
 
         return pred_spans
 
@@ -189,7 +197,7 @@ class Trainer:
         rev_emotion_label_map = self.val_dataloader.dataset.rev_emotion_labels
         emotion_idx = emotion_logits.argmax(-1)
 
-        pred_emotion_labels = [rev_emotion_label_map[idx] for idx in emotion_idx]
+        pred_emotion_labels = [rev_emotion_label_map[idx.item()] for idx in emotion_idx]
 
         return pred_emotion_labels
 
@@ -208,7 +216,7 @@ class Trainer:
                 'predicted_emotion': pred_emotion_label,
                 'compared_utterance_ID': data.get('utterance_id_j', -1),
                 'predicted_text': pred_span,
-                'gold_text':  data.get('causal_span', '')
+                'gold_text': data.get('causal_span', '')
             })
 
         return results
@@ -346,8 +354,21 @@ def multi_gpu_train(rank, config: TrainerConfig, n_gpus: int):
     trainer.train_task1()
 
 
+def joint_model_config():
+    return TrainerConfig()
+
+
+def emotion_classification_config():
+    return TrainerConfig(training_type=TrainingType.EMOTION_CLASSIFICATION,
+                         base_model_name="roberta-base")
+
+
+def span_classification_config():
+    return TrainerConfig(training_type=TrainingType.SPAN_CLASSIFICATION)
+
+
 if __name__ == '__main__':
-    trainer_config = TrainerConfig()
+    trainer_config = joint_model_config()
     n_procs = torch.cuda.device_count()
 
     if trainer_config.multi_gpu and n_procs > 1:
