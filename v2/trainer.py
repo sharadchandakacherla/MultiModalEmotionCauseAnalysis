@@ -350,8 +350,8 @@ if __name__ == '__main__':
     trainer_config = TrainerConfig()
     n_procs = torch.cuda.device_count()
 
-    if trainer_config.multi_gpu:
-        mp.spawn(multi_gpu_train, args=(trainer_config,), nprocs=n_procs)
+    if trainer_config.multi_gpu and n_procs > 1:
+        mp.spawn(multi_gpu_train, args=(trainer_config, n_procs), nprocs=n_procs)
     else:
         single_trainer = Trainer(trainer_config, n_gpus=n_procs)
         single_trainer.train_task1()
