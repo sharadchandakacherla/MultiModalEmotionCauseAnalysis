@@ -15,6 +15,7 @@ from tqdm import tqdm
 from config import TrainerConfig, TrainingType, TaskSolve
 from dataset import DatasetConfig, EmotionCausalDataset
 from models import ModelBaseClass, JointModel, EmotionClassification, SpanClassification
+from v2.metrics.evaluate import evaluate_runtime
 
 
 def select_model(training_type: TrainingType, solve_task: TaskSolve) -> Union[None, Type[ModelBaseClass]]:
@@ -276,6 +277,7 @@ class Trainer:
 
                 global_step = (epoch - 1) * len(self.val_dataloader)
                 processed_data = self.val_dataloader.dataset.processed_data
+                og_data = self.val_dataloader.dataset.data
 
                 with tqdm(total=len(self.val_dataloader), colour='red', leave=False) as bar:
                     for idx, (inp, labels, dataset_idx) in enumerate(self.val_dataloader, start=1):
@@ -288,7 +290,7 @@ class Trainer:
 
                             pred_spans = []
                             pred_emotion_labels = []
-                            og_data = [processed_data[idx] for idx in dataset_idx]
+                            processed_data_batch = [processed_data[idx] for idx in dataset_idx]
 
                             if self.config.training_type == TrainingType.JOINT_TRAINING:
                                 emotion_logits = out['emotion_logits']
@@ -304,7 +306,10 @@ class Trainer:
                                 span_logits = out['span_logits']
                                 pred_spans = self._extract_spans(span_logits=span_logits, text_inp=inp)
 
-                            results.extend(self._accumulate_results(og_data, pred_emotion_labels, pred_spans))
+                            results.extend(self._accumulate_results(processed_data_batch,
+                                                                    pred_emotion_labels, pred_spans))
+
+                            _ = evaluate_runtime(results, og_data)
 
                             bar.update()
                             bar.set_description(f'Val {epoch}/{self.config.epochs} - Loss {avg_loss:.3f}')
