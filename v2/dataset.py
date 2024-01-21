@@ -108,8 +108,7 @@ class EmotionCausalDataset(Dataset):
 
                         if j in caused_in_i:
                             spans = caused_in_i[j]
-                            # idx = utt_j.find(cause_span_txt)
-                            # spans = [idx + len(prefix), idx + len(cause_span_txt) + len(prefix)]
+
                         processed_data.append({
                             'conversation_id': scene['conversation_ID'],
                             'utterance_id_i': conv_i['utterance_ID'],
@@ -137,6 +136,7 @@ class EmotionCausalDataset(Dataset):
                     utt_i = conv['text']
                     emotion = conv['emotion']
                     text = f'{utt_i} {self.SPECIAL_TOKEN} {utt_all}'
+
                     processed_data.append({
                         'conversation_id': scene['conversation_ID'],
                         'utterance_id_i': conv['utterance_ID'],
@@ -180,8 +180,7 @@ class EmotionCausalDataset(Dataset):
 
                         if j in caused_in_i:
                             spans = caused_in_i[j]
-                            # idx = text.find(cause_span_txt)
-                            # spans = [idx, idx + len(cause_span_txt)]
+
                         processed_data.append({
                             'conversation_id': scene['conversation_ID'],
                             'utterance_id_i': conv_i['utterance_ID'],
