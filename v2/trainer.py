@@ -267,7 +267,7 @@ class Trainer:
 
             # Validation per epoch.
             if self.rank == 0:
-                # reset metrics for validation.
+                # reset _metrics for validation.
                 self.model.eval()
                 running_loss, running_acc = 0.0, 0.0
                 results = []
