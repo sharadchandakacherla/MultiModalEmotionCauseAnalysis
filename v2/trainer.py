@@ -246,8 +246,10 @@ class Trainer:
 
             self.model.train()
 
-            global_step = (epoch - 1) * len(self.train_dataloader)
-            with tqdm(total=len(self.train_dataloader), colour='cyan', leave=True, disable=disable_tqdm) as bar:
+            n_train = len(self.train_dataloader)
+
+            global_step = (epoch - 1) * n_train
+            with tqdm(total=n_train, colour='cyan', leave=True, disable=disable_tqdm) as bar:
                 for idx, (inp, labels, _) in enumerate(self.train_dataloader, start=1):
                     self.optim.zero_grad()
 
