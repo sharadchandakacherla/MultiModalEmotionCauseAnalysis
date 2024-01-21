@@ -414,10 +414,10 @@ def pred_mapper(results, gold_data_dict_filtered):
         mapped_preds.append(mapped_preds_obj)
     return mapped_preds
 
-def evaluate_runtime(results, dataset):
+def evaluate_runtime(results, data):
     conversation_IDs = set([x['conversation_ID'] for x in results])
-    gold_data_dict = convert_list_to_dict(dataset, main_key="conversation_ID")
-    gold_data_dict_filtered = {k: dataset[k-1] for k in conversation_IDs if k in gold_data_dict}
+    gold_data_dict = convert_list_to_dict(data, main_key="conversation_ID")
+    gold_data_dict_filtered = {k: data[k - 1] for k in conversation_IDs if k in gold_data_dict}
     pred_data = pred_mapper(results, gold_data_dict_filtered)
     pred_data_dict = convert_list_to_dict(pred_data, main_key="conversation_ID")
     pred_pairs, true_pairs = [], []
@@ -425,8 +425,8 @@ def evaluate_runtime(results, dataset):
     counter = 0
     for id, ins in gold_data_dict_filtered.items():  # The public evaluation data may contain some interference data that is not used for evaluation.
         if id not in pred_data_dict:
-            continue
-            sys.exit('Conversation {} are missing!'.format(id))
+            # continue
+            print('Conversation {} are missing!'.format(id))
         else:
             counter += 1
             pred = pred_data_dict[id]
@@ -437,25 +437,25 @@ def evaluate_runtime(results, dataset):
                 new_span_pair_list = []
                 for x in span_pair_list:
                     if not isinstance(x, list):
-                        sys.exit('emotion-cause_pairs format error!')
+                        print('emotion-cause_pairs format error!')
                     else:
                         if len(x) != 2:
-                            sys.exit('emotion-cause_pairs format error!')
+                            print('emotion-cause_pairs format error!')
                         else:
                             emo_id, emotion = x[0].split('_')
                             if emotion not in emotion_idx:
-                                sys.exit('Unknown emotion category!')
+                                print('Unknown emotion category!')
                             else:
                                 if 'U' in emo_id:
                                     emo_id = emo_id.replace('U', '')
                                 if pred:
                                     if has_letter(x[1]):
-                                        sys.exit(
+                                        print(
                                             'emotion-cause_pairs format error! You should provide the position index range of the cause span, not the text itself.')
                                     else:
                                         cause_info = x[1].split('_')
                                         if len(cause_info) != 3:
-                                            sys.exit('emotion-cause_pairs format error!')
+                                            print('emotion-cause_pairs format error!')
                                         else:
                                             cause_id, span_start_id, span_end_id = cause_info
                                             if 'U' in cause_id:
@@ -478,7 +478,7 @@ def evaluate_runtime(results, dataset):
             true_pairs.extend(get_new_pair_list(ins["emotion-cause_pairs"]))  #
             # print(f'adding spans for convid {id} count true : {len(ins["emotion-cause_pairs"])} count : {len(true_pairs)} \n')
             if "emotion-cause_pairs" not in pred:
-                sys.exit("Cannot find the key 'emotion-cause_pairs'!")
+                print("Cannot find the key 'emotion-cause_pairs'!")
             else:
                 pred_pairs.extend(get_new_pair_list(pred["emotion-cause_pairs"], pred=True))
 
