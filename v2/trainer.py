@@ -189,7 +189,7 @@ class Trainer:
 
         tokenizer = self.model.module.tokenizer() if self.n_gpus > 1 else self.model.tokenizer()
         pred_spans = tokenizer.batch_decode(masked_text_span, skip_special_tokens=True)
-        pred_spans = [span.replace(" ##", "").replace("##", "") for span in pred_spans]
+        pred_spans = [span.replace(" ##", "").replace("##", "").strip() for span in pred_spans]
 
         return pred_spans
 
