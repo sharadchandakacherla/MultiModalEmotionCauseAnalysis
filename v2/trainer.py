@@ -234,32 +234,14 @@ class Trainer:
 
                     self.optim.step()
 
-                    running_loss += loss.item()
-                    avg_loss = running_loss / idx
-                    avg_emo_acc = None
-
-                    # TODO: Evaluate metrics.
-                    if self.config.training_type == TrainingType.JOINT_TRAINING:
-                        # emotion_logits = out['emotion_logits']
-                        # Calculate emotion acc
-                        # running_acc = ...
-                        avg_emo_acc = running_acc / idx
-                        # span_logits = out['span_logits']
-                        # Calculate span based metric?
-                    elif self.config.training_type == TrainingType.EMOTION_CLASSIFICATION:
-                        # emotion_logits = out['emotion_logits']
-                        # Calculate emotion acc
-                        # runnning_acc = ...
-                        avg_emo_acc = running_acc / idx
-                    else:
-                        pass
-                        # span_logits = out['span_logits']
-                        # Calculate span based metric?
-
                     if self.rank == 0:
+                        running_loss += loss.item()
+                        avg_loss = running_loss / idx
                         bar_string = f'Training {epoch}/{self.config.epochs} - Loss {avg_loss:.3f}'
                         self.writer.add_scalar('Loss/train', avg_loss, global_step=global_step)
-                        if avg_emo_acc is not None:
+
+                        if self.config.training_type == TrainingType.EMOTION_CLASSIFICATION:
+                            avg_emo_acc = running_acc / idx
                             bar_string = f'{bar_string} - emo_acc: {avg_emo_acc:.3f}'
                             self.writer.add_scalar('Loss/emo_acc', avg_emo_acc, global_step=global_step)
 
