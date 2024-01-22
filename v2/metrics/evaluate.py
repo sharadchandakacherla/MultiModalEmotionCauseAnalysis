@@ -424,7 +424,8 @@ def pred_mapper(results, gold_data_dict_filtered):
 def evaluate_runtime(results: list, data: dict):
     conversation_IDs = set([x['conversation_ID'] for x in results])
     gold_data_dict = convert_list_to_dict(data, main_key="conversation_ID")
-    gold_data_dict_filtered = {k: data[k - 1] for k in conversation_IDs if k in gold_data_dict}
+    gold_data_dict_filtered = {k: gold_data_dict[k] for k in conversation_IDs if k in gold_data_dict}
+
     pred_data = pred_mapper(results, gold_data_dict_filtered)
     pred_data_dict = convert_list_to_dict(pred_data, main_key="conversation_ID")
     pred_pairs, true_pairs = [], []

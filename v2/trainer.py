@@ -361,6 +361,7 @@ class Trainer:
                     dist.barrier()
 
             self.config.current_epoch += 1
+            running_loss, running_acc = 0.0, 0.0
 
         if self.rank == 0:
             self.writer.close()
