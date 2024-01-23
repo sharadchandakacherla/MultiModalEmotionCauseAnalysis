@@ -85,6 +85,8 @@ class Trainer:
                                                  device=self.device, seed=config.splitting_seed,
                                                  split=config.train_split_ratio)
 
+            self.model.set_class_imbalance_weights(train_dataset.get_class_imbalance_weights(), device=self.device)
+
             val_dataset = EmotionCausalDataset(path, DatasetConfig.VAL, config.training_type, tokenizer,
                                                device=self.device, seed=config.splitting_seed,
                                                split=config.train_split_ratio)

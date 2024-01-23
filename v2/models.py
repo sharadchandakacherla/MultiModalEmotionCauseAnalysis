@@ -26,6 +26,7 @@ class ModelBaseClass(nn.Module):
             self.model = RobertaForSequenceClassification.from_pretrained(base_model_name)
 
         self._tokenizer = AutoTokenizer.from_pretrained(self.base_model_name)
+        self._class_imbalance_weights = None
 
     def tokenizer(self):
         return self._tokenizer
@@ -45,6 +46,10 @@ class ModelBaseClass(nn.Module):
     def unfreeze_base_model(self):
         for param in self.model.parameters():
             param.requires_grad = True
+
+    def set_class_imbalance_weights(self, weights, device):
+        weights = torch.Tensor([v for k, v in weights.items()]).to(device)
+        self._class_imbalance_weights = weights
 
     def _span_loss(self, x, span_logits) -> torch.Tensor:
         total_loss = None
@@ -90,7 +95,7 @@ class ModelBaseClass(nn.Module):
         labels = x.get('label', None)
 
         if labels is not None:
-            ce_loss = nn.CrossEntropyLoss()
+            ce_loss = nn.CrossEntropyLoss(weight=self._class_imbalance_weights)
             loss = ce_loss(emotion_logits, labels)
 
         return loss

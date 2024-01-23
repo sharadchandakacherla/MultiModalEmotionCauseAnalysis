@@ -64,6 +64,19 @@ class EmotionCausalDataset(Dataset):
         self.processed_data = []
         self.process_dataset()
 
+    def get_class_imbalance_weights(self) -> dict:
+        counts = {key: 0 for key in self.rev_emotion_labels.keys()}
+
+        for data in self.processed_data:
+            emotion = data['emotion']
+            idx = self.emotion_labels[emotion]
+            counts[idx] += 1
+
+        n = len(self)
+        counts = {key: (n - val) / n for key, val in counts.items()}
+
+        return counts
+
     def process_dataset(self):
         processed_data = []
         if self.training_type == TrainingType.JOINT_TRAINING:
