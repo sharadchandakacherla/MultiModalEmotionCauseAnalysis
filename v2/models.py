@@ -48,8 +48,7 @@ class ModelBaseClass(nn.Module):
             param.requires_grad = True
 
     def set_class_imbalance_weights(self, weights, device):
-        weights = torch.Tensor([v for k, v in weights.items()]).to(device)
-        self._class_imbalance_weights = weights
+        self._class_imbalance_weights = torch.Tensor(weights).to(device)
 
     def _span_loss(self, x, span_logits) -> torch.Tensor:
         total_loss = None

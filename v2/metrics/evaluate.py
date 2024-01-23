@@ -343,12 +343,14 @@ def pred_mapper(results, gold_data_dict_filtered):
     mapped_preds = {}
     for result in results:
         convid = result["conversation_ID"]
-        mapped_preds[convid]  = {"conversation_ID":convid, 'conversation': gold_data_dict_filtered[convid]["conversation"], 'emotion-cause_pairs' : []}
+        mapped_preds[convid] = {"conversation_ID": convid,
+                                'conversation': gold_data_dict_filtered[convid]["conversation"],
+                                'emotion-cause_pairs': []}
 
     for result in results:
         conv_emotion_cause_pairs = []
         convid = result["conversation_ID"]
-        u_i = result["utterance_ID"]
+        utt_i_id = result["utterance_ID"]
         # u_j = result["compared_utterance_ID"]
         emotion = result["predicted_emotion"]
         utt_js = gold_data_dict_filtered[convid]["conversation"]
@@ -363,13 +365,14 @@ def pred_mapper(results, gold_data_dict_filtered):
                 if pred in utt_j:
                     start_index = utt_j.find(pred)
                     end_index = start_index + len(pred) + 1
-                    utt_j_index = reverse_utt_j_dict[utt_j]
+                    utt_j_id = reverse_utt_j_dict[utt_j]
                     if start_index == -1:
                         continue
-                    conv_emotion_cause_pairs.append([f'{u_i}{emotion}', f'{utt_j_index}{start_index}_{end_index}'])
+                    conv_emotion_cause_pairs.append([f'{utt_i_id}_{emotion}', f'{utt_j_id}_{start_index}_{end_index}'])
 
-        if len(conv_emotion_cause_pairs) > 0:
-            mapped_preds[convid]['emotion-cause_pairs'].append(conv_emotion_cause_pairs)
+        # if len(conv_emotion_cause_pairs) > 0:
+        mapped_preds[convid]['emotion-cause_pairs'] = conv_emotion_cause_pairs
+
     return mapped_preds.values()
 
 
@@ -480,7 +483,7 @@ def main():
             pred_data = get_json_data(pred_file)
             gold_data = get_json_data(gold_file)
             if 'Subtask_1' in subtask_name:
-                results=[] #substitute results
+                results = []  # substitute results
                 score_list, score_list_1 = evaluate_runtime(results, gold_data)
                 output_file.write("weighted_strict_precision:{}\n".format(score_list[0]))
                 output_file.write("weighted_strict_recall:{}\n".format(score_list[1]))
