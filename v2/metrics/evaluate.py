@@ -340,83 +340,35 @@ def evaluate_2_2(pred_data, gold_data):
 
 
 def pred_mapper(results, gold_data_dict_filtered):
-    # each results looks like this
-    # [
-    #     {
-    #         "conversation_ID": "sceneid",
-    #         "utterance_ID": "U_i",
-    #         "gold_emotion": "goldlabelofU_i",
-    #         "predicted_emotion": "pred_label",
-    #         "compared_utterance_ID": "U_j",
-    #         "indices_compared_utterance": [
-    #             "start_index_predicted",
-    #             "end_index_predicted"
-    #         ],
-    #         "gold_indices": [
-    #             "start_index_predicted",
-    #             "end_index_predicted"
-    #         ]
-    #     }
-    # ]
-    # how each should look
-    # {
-    #     "conversation_ID": 2,
-    #     "conversation": [
-    #         {
-    #             "utterance_ID": 1,
-    #             "text": "I do not want to be single , okay ? I just ... I just ... I just wanna be married again !",
-    #             "speaker": "Ross"
-    #         },
-    #         {
-    #             "utterance_ID": 2,
-    #             "text": "And I just want a million dollars !",
-    #             "speaker": "Chandler"
-    #         },
-    #         {
-    #             "utterance_ID": 3,
-    #             "text": "Rachel ? !",
-    #             "speaker": "Monica"
-    #         }
-    #     ],
-    #     "emotion-cause_pairs": [
-    #         [
-    #             "1_sadness",
-    #             "1_0_22"
-    #         ],
-    #         [
-    #             "3_surprise",
-    #             "3_0_1"
-    #         ]
-    #     ]
-    # }
     mapped_preds = []
-    flat_map_preds = {}
     for result in results:
-        convid = result["conversation_ID"]
-        if convid not in flat_map_preds:
-            flat_map_preds[convid] = []
-    for result in results:
+        conv_emotion_cause_pairs = []
         convid = result["conversation_ID"]
         u_i = result["utterance_ID"]
-        u_j = result["compared_utterance_ID"]
+        # u_j = result["compared_utterance_ID"]
         emotion = result["predicted_emotion"]
-        utt_j = gold_data_dict_filtered[convid]["conversation"][u_j - 1]['text']
+        utt_js = gold_data_dict_filtered[convid]["conversation"]
+        reverse_utt_j_dict = {}
+        for k,v in enumerate(utt_js):
+            if v['text'] not in reverse_utt_j_dict:
+                reverse_utt_j_dict[v['text']] = k+1
 
-        pred_text = result['predicted_text']
-        start_index = utt_j.find(result['predicted_text'])
-        if start_index == -1:
-            continue
+        pred_texts = result['predicted_text']
+        for pred in pred_texts:
+            for utt_j in reverse_utt_j_dict:
+                if pred in utt_j:
+                    start_index = utt_j.find(pred)
+                    end_index = start_index + len(pred) + 1
+                    utt_j_index = reverse_utt_j_dict[utt_j]
+                    if start_index == -1:
+                        continue
+                    conv_emotion_cause_pairs.append([f'{u_i}_{emotion}', f'{utt_j_index}_{start_index}_{end_index}'])
 
-        end_index = start_index + len(pred_text)
-        if convid in flat_map_preds:
-            flat_map_preds[convid].append([f'{u_i}_{emotion}', f'{u_j}_{start_index}_{end_index}'])
-
-    for key, values in flat_map_preds.items():
         mapped_preds_obj = {}
-        mapped_preds_obj['emotion-cause_pairs'] = []
-        mapped_preds_obj['conversation_ID'] = key
-        mapped_preds_obj['conversation'] = gold_data_dict_filtered[key]["conversation"]
-        mapped_preds_obj['emotion-cause_pairs'] = values
+        # mapped_preds_obj['emotion-cause_pairs'] = []
+        mapped_preds_obj['conversation_ID'] = convid
+        mapped_preds_obj['conversation'] = gold_data_dict_filtered[convid]["conversation"]
+        mapped_preds_obj['emotion-cause_pairs'] = conv_emotion_cause_pairs
         mapped_preds.append(mapped_preds_obj)
     return mapped_preds
 
@@ -528,26 +480,38 @@ def main():
             pred_data = get_json_data(pred_file)
             gold_data = get_json_data(gold_file)
             if 'Subtask_1' in subtask_name:
-                results = [
-                    {
-                        "conversation_ID": 2,
-                        "utterance_ID": 1,
-                        "gold_emotion": "sadness",
-                        "predicted_emotion": "sadness",
-                        "compared_utterance_ID": 1,
-                        "predicted_text": "I do not want to be single , okay",
-                        "gold_indices": "I do not want to be single"
-                    },
-                    {
-                        "conversation_ID": 2,
-                        "utterance_ID": 3,
-                        "gold_emotion": "surprise",
-                        "predicted_emotion": "surprise",
-                        "compared_utterance_ID": 3,
-                        "predicted_text": "Rachel ? !",
-                        "gold_indices": "Rachel ? !"
-                    }
-                ]
+                # results = [
+                #     {
+                #         "conversation_ID": 2,
+                #         "utterance_ID": 1,
+                #         "gold_emotion": "sadness",
+                #         "predicted_emotion": "sadness",
+                #         "compared_utterance_ID": 1,
+                #         "predicted_text": "I do not want to be single , okay",
+                #         "gold_indices": "I do not want to be single"
+                #     },
+                #     {
+                #         "conversation_ID": 2,
+                #         "utterance_ID": 3,
+                #         "gold_emotion": "surprise",
+                #         "predicted_emotion": "surprise",
+                #         "compared_utterance_ID": 3,
+                #         "predicted_text": "Rachel ? !",
+                #         "gold_indices": "Rachel ? !"
+                #     }
+                # ]
+                with open(
+                        "/Users/sharadc/Documents/uic/semester4/CS598/MultiModalEmotionCauseAnalysis/v2/metrics/validation_10_1.json") as f:
+                    results = json.load(f)['results_10']
+                for i in results:
+                    predicted_text = i['predicted_text']
+                    predicted_text = [predicted_text]
+                    i['predicted_text'] = predicted_text
+
+                with open(
+                        "/Users/sharadc/Documents/uic/semester4/CS598/MultiModalEmotionCauseAnalysis/v2/metrics/og_data.json") as f:
+                    gold_data = json.load(f)
+
                 score_list, score_list_1 = evaluate_runtime(results, gold_data)
                 output_file.write("weighted_strict_precision:{}\n".format(score_list[0]))
                 output_file.write("weighted_strict_recall:{}\n".format(score_list[1]))
