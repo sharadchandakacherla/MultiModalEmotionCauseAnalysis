@@ -54,8 +54,9 @@ class EmotionCausalDataset(Dataset):
             ratio = int(split * len(data))
             sampling_idx = sampling_idx[: ratio] if self._config == DatasetConfig.TRAIN else sampling_idx[ratio:]
         else:
-            # TODO: Mock on trial data
-            data = []
+            with open(os.path.join(self.path, 'Subtask_1_test.json')) as f:
+                data = json.load(f)
+
             sampling_idx = list(range(len(data)))
 
         self._sampling_idx = sampling_idx
@@ -65,7 +66,6 @@ class EmotionCausalDataset(Dataset):
 
     def process_dataset(self):
         processed_data = []
-
         if self.training_type == TrainingType.JOINT_TRAINING:
             processed_data = self._process_data_for_joint_model()
         elif self.training_type == TrainingType.EMOTION_CLASSIFICATION:
@@ -74,6 +74,26 @@ class EmotionCausalDataset(Dataset):
             processed_data = self._process_data_for_span_classification()
 
         self.processed_data = processed_data
+
+    def _process_data_for_test(self) -> List[Dict]:
+        processed_data = []
+
+        for scene in self.data:
+            conversations = scene['conversations']
+            conv_id = scene['conversation_ID']
+            utt_all = ' '.join(conv['text'] for conv in conversations)
+
+            for conv in conversations:
+                utt_i = conv['text']
+                text = f'{utt_i} {self.SPECIAL_TOKEN} {utt_all}'
+
+                processed_data.append({
+                    'conversation_id': conv_id,
+                    'utterance_id_i': conv['utterance_ID'],
+                    'text': text
+                })
+
+        return processed_data
 
     def _process_data_for_span_classification(self):
         processed_data = []
@@ -119,7 +139,7 @@ class EmotionCausalDataset(Dataset):
                         })
 
         else:
-            raise NotImplementedError('Need to check in trail data.')
+            processed_data = self._process_data_for_test()
 
         return processed_data
 
@@ -143,6 +163,8 @@ class EmotionCausalDataset(Dataset):
                         'text': text,
                         'emotion': emotion
                     })
+        else:
+            processed_data = self._process_data_for_test()
 
         return processed_data
 
@@ -177,18 +199,7 @@ class EmotionCausalDataset(Dataset):
                     #     utt_j = conv_j['text']
                     text_p = f'{utt_i} {self.SPECIAL_TOKEN} '
                     text = f'{text_p}{utt_all}'
-                    spans = []
 
-                    # for j, causal in conv_i['caused_by'].items():
-                    #     # fp = utt_all.find(causal)+len(text_p)
-                    #     # ep = fp+len(causal)
-                    #     spans.append(causal)
-                    # if j in caused_in_i:
-                    #     spans = caused_in_i[j]
-                    # fp = utt_all.find(causal)+len(text_p)
-                    # ep = fp+len(causal)
-                    # positions = [fp,ep]
-                    # s_i, e_i = positions['start_positions'], positions['end_positions']
                     processed_data.append({
                         'conversation_id': scene['conversation_ID'],
                         'utterance_id_i': conv_i['utterance_ID'],
@@ -199,7 +210,7 @@ class EmotionCausalDataset(Dataset):
                     })
 
         else:
-            raise NotImplementedError('Need to check in trail data.')
+            processed_data = self._process_data_for_test()
 
         return processed_data
 
@@ -248,7 +259,7 @@ class EmotionCausalDataset(Dataset):
                         })
 
         else:
-            raise NotImplementedError('Need to check in trail data.')
+            processed_data = self._process_data_for_test()
 
         return processed_data
 
@@ -263,6 +274,9 @@ class EmotionCausalDataset(Dataset):
 
         tokenized_inp = self.tokenizer(text_inp, padding='max_length', max_length=512, return_tensors='pt',
                                        truncation=True)
+
+        if self._config == DatasetConfig.TEST:
+            return tokenized_inp, item
 
         if self.training_type == TrainingType.JOINT_TRAINING:
             label_indices = [0] * len(causal_span_label)

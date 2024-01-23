@@ -16,7 +16,7 @@ from tqdm import tqdm
 from config import TrainerConfig, TrainingType, TaskSolve
 from dataset import DatasetConfig, EmotionCausalDataset
 from models import ModelBaseClass, JointModel, EmotionClassification, SpanClassification
-from metrics.evaluate import evaluate_runtime
+from metrics.evaluate import evaluate_runtime, evaluate_1_2
 
 
 def select_model(training_type: TrainingType, solve_task: TaskSolve) -> Union[None, Type[ModelBaseClass]]:
@@ -89,15 +89,16 @@ class Trainer:
                                                device=self.device, seed=config.splitting_seed,
                                                split=config.train_split_ratio)
 
-        #             test_dataset = EmotionCausalDataset(path, DatasetConfig.TEST, config.training_type, tokenizer,
-        #                                                 device=self.device, seed=config.splitting_seed,
-        #                                                 split=config.train_split_ratio)
+            test_dataset = EmotionCausalDataset(path, DatasetConfig.TEST, config.training_type, tokenizer,
+                                                device=self.device, seed=config.splitting_seed,
+                                                split=config.train_split_ratio)
+
         elif config.solve_task == TaskSolve.TASK2:
             pass
 
         self.train_dataloader = self._get_dataloader(train_dataset, shuffle=True, for_training=True)
         self.val_dataloader = self._get_dataloader(val_dataset, shuffle=False, for_training=False)
-        # self.test_dataloader = self._get_dataloader(test_dataset, shuffle=False, for_training=False)
+        self.test_dataloader = self._get_dataloader(test_dataset, shuffle=False, for_training=False)
 
         self.writer = SummaryWriter(log_dir=os.path.join(config.base_path, config.model_log_path)) \
             if self.rank == 0 else None
@@ -174,9 +175,9 @@ class Trainer:
         return dataloader
 
     @staticmethod
-    def add_whitespaec_after_punctuations(txt):
+    def _add_whitespace_after_punctuations(txt):
         n = len(txt)
-        punct = [
+        punctuations = [
             ',',
             '!',
             '?',
@@ -191,14 +192,14 @@ class Trainer:
         if n < 3:
             return txt
 
-        if txt[-1] in punct:
+        if txt[-1] in punctuations:
             txt = f'{txt[:-1]} {txt[-1]}'
-        if txt[0] in punct:
+        if txt[0] in punctuations:
             txt = f'{txt[0]} {txt[1:]}'
 
         inner = txt[1: -1]
 
-        for char in punct:
+        for char in punctuations:
             inner = inner.replace(char, f' {char} ')
 
         txt = f'{txt[0]}{inner}{txt[-1]}'
@@ -223,7 +224,7 @@ class Trainer:
         tokenizer = self.model.module.tokenizer() if self.n_gpus > 1 else self.model.tokenizer()
         pred_spans = tokenizer.batch_decode(masked_text_span, skip_special_tokens=True)
         pred_spans = [span.replace(" ##", "").replace("##", "").strip() for span in pred_spans]
-        pred_spans = [self.add_whitespaec_after_punctuations(span) for span in pred_spans]
+        pred_spans = [self._add_whitespace_after_punctuations(span) for span in pred_spans]
 
         return pred_spans
 
@@ -235,7 +236,7 @@ class Trainer:
         tokenizer = self.model.module.tokenizer() if self.n_gpus > 1 else self.model.tokenizer()
         pred_spans = tokenizer.batch_decode(masked_text_span, skip_special_tokens=True)
         pred_spans = [span.replace(" ##", "").replace("##", "").strip() for span in pred_spans]
-        pred_spans = [self.add_whitespaec_after_punctuations(span) for span in pred_spans]
+        pred_spans = [self._add_whitespace_after_punctuations(span) for span in pred_spans]
 
         return pred_spans
 
@@ -430,8 +431,46 @@ class Trainer:
             dist.barrier()
             cleanup()
 
-    def evaluate_task1(self):
-        pass
+    @torch.no_grad()
+    def evaluate_task1(self, threshold: float = None):
+        if self.config.training_type != TrainingType.JOINT_TRAINING:
+            raise NotImplementedError(f'Not implemented testing for other training types')
+
+        if threshold is None:
+            n = len(self.config.confidence_threshold)
+            threshold = self.config.confidence_threshold[n // 2]
+
+        self.model.eval()
+        model = self.model.module if self.n_gpus > 1 else self.model
+        n_test = len(self.test_dataloader)
+        processed_data = self.test_dataloader.dataset.processed_data
+
+        running_loss = 0.0
+        results = []
+
+        with tqdm(total=n_test, colour='red', leave=True) as bar:
+            for idx, (inp, dataset_idx) in enumerate(self.test_dataloader, start=1):
+                out = model(inp, {})
+                loss = out['loss']
+                emotion_logits = out['emotion_logits']
+                span_logits = out['span_logits']
+
+                running_loss += loss.item()
+                avg_loss = running_loss / idx
+                processed_data_batch = [processed_data[d_idx] for d_idx in dataset_idx]
+                pred_emotion_labels = self._extract_emotion_logits(emotion_logits=emotion_logits)
+                bar = f'Test Loss {avg_loss:.3f}'
+                pred_spans = self._extract_spans_multilabel(span_logits=span_logits, text_inp=inp, confidence=threshold)
+
+                results.extend([
+                    {
+                        'conversation_ID': processed_data_batch[b_idx]['conversation_id'],
+                        'utterance_ID': processed_data_batch[b_idx]['utterance_id_i'],
+                        'text': pred_spans[b_idx],
+                        'emotion': pred_emotion_labels
+                    }
+                    for b_idx in range(self.config.val_batch_size)
+                ])
 
 
 def multi_gpu_train(rank, config: TrainerConfig, n_gpus: int):
@@ -444,8 +483,7 @@ def joint_model_config():
 
 
 def emotion_classification_config():
-    return TrainerConfig(training_type=TrainingType.EMOTION_CLASSIFICATION,
-                         base_model_name="roberta-base")
+    return TrainerConfig(training_type=TrainingType.EMOTION_CLASSIFICATION)
 
 
 def span_classification_config():
