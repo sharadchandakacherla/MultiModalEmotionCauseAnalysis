@@ -19,7 +19,7 @@ class TrainerConfig:
     base_path: str = os.getcwd()
     model_log_path: str = 'roberta-base_log_exp1'
     model_save_path: str = 'roberta-base_save_exp1'
-    base_model_name: str = 'mrm8488/spanbert-finetuned-squadv2'
+    base_model_name: str = 'roberta-base'
     no_classes: int = 7 # 6 + 1
     train_split_ratio: float = 0.8
     splitting_seed: int = 42
