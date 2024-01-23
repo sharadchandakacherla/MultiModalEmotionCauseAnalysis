@@ -343,9 +343,7 @@ def pred_mapper(results, gold_data_dict_filtered):
     mapped_preds = {}
     for result in results:
         convid = result["conversation_ID"]
-        mapped_preds[convid] = {"conversation_ID": convid,
-                                'conversation': gold_data_dict_filtered[convid]["conversation"],
-                                'emotion-cause_pairs': []}
+        mapped_preds[convid]  = {"conversation_ID":convid, 'conversation': gold_data_dict_filtered[convid]["conversation"], 'emotion-cause_pairs' : []}
 
     for result in results:
         conv_emotion_cause_pairs = []
@@ -372,7 +370,6 @@ def pred_mapper(results, gold_data_dict_filtered):
 
         if len(conv_emotion_cause_pairs) > 0:
             mapped_preds[convid]['emotion-cause_pairs'].append(conv_emotion_cause_pairs)
-
     return mapped_preds.values()
 
 
@@ -400,10 +397,10 @@ def evaluate_runtime(results: list, data: dict):
                 new_span_pair_list = []
                 for x in span_pair_list:
                     if not isinstance(x, list):
-                        print('emotion-cause_pairs format error!')
+                        print('emotion-cause_pairs format error1!')
                     else:
                         if len(x) != 2:
-                            print('emotion-cause_pairs format error!')
+                            print('emotion-cause_pairs format error2!')
                         else:
                             emo_id, emotion = x[0].split('_')
                             if emotion not in emotion_idx:
@@ -418,7 +415,7 @@ def evaluate_runtime(results: list, data: dict):
                                     else:
                                         cause_info = x[1].split('_')
                                         if len(cause_info) != 3:
-                                            print('emotion-cause_pairs format error!')
+                                            print('emotion-cause_pairs format error3!')
                                         else:
                                             cause_id, span_start_id, span_end_id = cause_info
                                             if 'U' in cause_id:
@@ -483,38 +480,7 @@ def main():
             pred_data = get_json_data(pred_file)
             gold_data = get_json_data(gold_file)
             if 'Subtask_1' in subtask_name:
-                # results = [
-                #     {
-                #         "conversation_ID": 2,
-                #         "utterance_ID": 1,
-                #         "gold_emotion": "sadness",
-                #         "predicted_emotion": "sadness",
-                #         "compared_utterance_ID": 1,
-                #         "predicted_text": "I do not want to be single , okay",
-                #         "gold_indices": "I do not want to be single"
-                #     },
-                #     {
-                #         "conversation_ID": 2,
-                #         "utterance_ID": 3,
-                #         "gold_emotion": "surprise",
-                #         "predicted_emotion": "surprise",
-                #         "compared_utterance_ID": 3,
-                #         "predicted_text": "Rachel ? !",
-                #         "gold_indices": "Rachel ? !"
-                #     }
-                # ]
-                with open(
-                        "/Users/sharadc/Documents/uic/semester4/CS598/MultiModalEmotionCauseAnalysis/v2/metrics/validation_10_1.json") as f:
-                    results = json.load(f)['results_10']
-                for i in results:
-                    predicted_text = i['predicted_text']
-                    predicted_text = [predicted_text]
-                    i['predicted_text'] = predicted_text
-
-                with open(
-                        "/Users/sharadc/Documents/uic/semester4/CS598/MultiModalEmotionCauseAnalysis/v2/metrics/og_data.json") as f:
-                    gold_data = json.load(f)
-
+                results=[] #substitute results
                 score_list, score_list_1 = evaluate_runtime(results, gold_data)
                 output_file.write("weighted_strict_precision:{}\n".format(score_list[0]))
                 output_file.write("weighted_strict_recall:{}\n".format(score_list[1]))
