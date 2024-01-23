@@ -173,6 +173,40 @@ class Trainer:
 
         return dataloader
 
+    @staticmethod
+    def add_whitespaec_after_punctuations(txt):
+        n = len(txt)
+        punct = [
+            ',',
+            '!',
+            '?',
+            '.',
+            ';',
+            '$',
+            '&',
+            '"',
+            '...'
+        ]
+
+        if n < 3:
+            return txt
+
+        if txt[-1] in punct:
+            txt = f'{txt[:-1]} {txt[-1]}'
+        if txt[0] in punct:
+            txt = f'{txt[0]} {txt[1:]}'
+
+        inner = txt[1: -1]
+
+        for char in punct:
+            inner = inner.replace(char, f' {char} ')
+
+        txt = f'{txt[0]}{inner}{txt[-1]}'
+        # removing extra whitespaces.
+        txt = txt.replace('  ', ' ')
+
+        return txt
+
     def _extract_spans(self, span_logits: torch.Tensor, text_inp: dict) -> list:
         start_span_logit, end_span_logit = (x.squeeze(-1).contiguous() for x in span_logits.split(1, dim=-1))
         start_span_idx = start_span_logit.argmax(-1).tolist()
@@ -189,6 +223,7 @@ class Trainer:
         tokenizer = self.model.module.tokenizer() if self.n_gpus > 1 else self.model.tokenizer()
         pred_spans = tokenizer.batch_decode(masked_text_span, skip_special_tokens=True)
         pred_spans = [span.replace(" ##", "").replace("##", "").strip() for span in pred_spans]
+        pred_spans = [self.add_whitespaec_after_punctuations(span) for span in pred_spans]
 
         return pred_spans
 
@@ -200,6 +235,7 @@ class Trainer:
         tokenizer = self.model.module.tokenizer() if self.n_gpus > 1 else self.model.tokenizer()
         pred_spans = tokenizer.batch_decode(masked_text_span, skip_special_tokens=True)
         pred_spans = [span.replace(" ##", "").replace("##", "").strip() for span in pred_spans]
+        pred_spans = [self.add_whitespaec_after_punctuations(span) for span in pred_spans]
 
         return pred_spans
 
@@ -224,7 +260,7 @@ class Trainer:
                 'utterance_ID': data['utterance_id_i'],
                 'gold_emotion': data['emotion'],
                 'predicted_emotion': pred_emotion_label,
-                'compared_utterance_ID': data.get('utterance_id_j', -1),
+                'compared_utterance_ID': data.get('utterance_id_j', -1),  # Not in use anymore.
                 'predicted_text': pred_span,
                 'gold_text': data.get('causal_span', '')
             })

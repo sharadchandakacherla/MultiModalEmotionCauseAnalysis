@@ -77,7 +77,7 @@ class ModelBaseClass(nn.Module):
         computes loss for logits of shape (None, seq_len). This is similar to multi-label classification.
         """
         loss = None
-        span_label_mask = x.get('span_label_mask', None)
+        span_label_mask = x.get('span_labels', None)
 
         if span_label_mask is not None:
             bce_loss = nn.BCEWithLogitsLoss()
