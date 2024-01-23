@@ -79,7 +79,7 @@ class EmotionCausalDataset(Dataset):
         processed_data = []
 
         for scene in self.data:
-            conversations = scene['conversations']
+            conversations = scene['conversation']
             conv_id = scene['conversation_ID']
             utt_all = ' '.join(conv['text'] for conv in conversations)
 
@@ -276,6 +276,7 @@ class EmotionCausalDataset(Dataset):
                                        truncation=True)
 
         if self._config == DatasetConfig.TEST:
+            tokenized_inp = {k: v.squeeze().to(self.device) for k, v in tokenized_inp.items()}
             return tokenized_inp, item
 
         if self.training_type == TrainingType.JOINT_TRAINING:
@@ -340,8 +341,9 @@ def find_nth_occurrenceV3(haystack, needle, n=2):
 
         if len(occurrences) > 1:
             return {"start_positions": occurrences[-1][0], "end_positions": occurrences[-1][1]}
-        else:
+        elif len(occurrences) == 1:
             return {"start_positions": occurrences[0][0], "end_positions": occurrences[0][1]}
+
     return {"start_positions": 0, "end_positions": 0}
 
 

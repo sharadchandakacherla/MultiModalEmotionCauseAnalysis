@@ -340,7 +340,13 @@ def evaluate_2_2(pred_data, gold_data):
 
 
 def pred_mapper(results, gold_data_dict_filtered):
-    mapped_preds = []
+    mapped_preds = {}
+    for result in results:
+        convid = result["conversation_ID"]
+        mapped_preds[convid] = {"conversation_ID": convid,
+                                'conversation': gold_data_dict_filtered[convid]["conversation"],
+                                'emotion-cause_pairs': []}
+
     for result in results:
         conv_emotion_cause_pairs = []
         convid = result["conversation_ID"]
@@ -349,9 +355,9 @@ def pred_mapper(results, gold_data_dict_filtered):
         emotion = result["predicted_emotion"]
         utt_js = gold_data_dict_filtered[convid]["conversation"]
         reverse_utt_j_dict = {}
-        for k,v in enumerate(utt_js):
+        for k, v in enumerate(utt_js):
             if v['text'] not in reverse_utt_j_dict:
-                reverse_utt_j_dict[v['text']] = k+1
+                reverse_utt_j_dict[v['text']] = k + 1
 
         pred_texts = result['predicted_text']
         for pred in pred_texts:
@@ -362,15 +368,12 @@ def pred_mapper(results, gold_data_dict_filtered):
                     utt_j_index = reverse_utt_j_dict[utt_j]
                     if start_index == -1:
                         continue
-                    conv_emotion_cause_pairs.append([f'{u_i}_{emotion}', f'{utt_j_index}_{start_index}_{end_index}'])
+                    conv_emotion_cause_pairs.append([f'{u_i}{emotion}', f'{utt_j_index}{start_index}_{end_index}'])
 
-        mapped_preds_obj = {}
-        # mapped_preds_obj['emotion-cause_pairs'] = []
-        mapped_preds_obj['conversation_ID'] = convid
-        mapped_preds_obj['conversation'] = gold_data_dict_filtered[convid]["conversation"]
-        mapped_preds_obj['emotion-cause_pairs'] = conv_emotion_cause_pairs
-        mapped_preds.append(mapped_preds_obj)
-    return mapped_preds
+        if len(conv_emotion_cause_pairs) > 0:
+            mapped_preds[convid]['emotion-cause_pairs'].append(conv_emotion_cause_pairs)
+
+    return mapped_preds.values()
 
 
 def evaluate_runtime(results: list, data: dict):

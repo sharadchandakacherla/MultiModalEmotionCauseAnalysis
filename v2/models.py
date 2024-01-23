@@ -81,7 +81,7 @@ class ModelBaseClass(nn.Module):
 
         if span_label_mask is not None:
             bce_loss = nn.BCEWithLogitsLoss()
-            loss = bce_loss(span_logits, span_label_mask)
+            loss = bce_loss(span_logits, span_label_mask.float())
 
         return loss
 
@@ -133,7 +133,7 @@ class JointModel(ModelBaseClass):
         hidden_state = out['last_hidden_state']
         pooler_out = out['pooler_output']
 
-        span_logits = self.span_head(hidden_state)
+        span_logits = self.span_head(hidden_state).squeeze(-1)
         emotion_logits = self.emotion_head(pooler_out)
 
         span_label_loss = self._multi_label_span_loss(labels, span_logits)

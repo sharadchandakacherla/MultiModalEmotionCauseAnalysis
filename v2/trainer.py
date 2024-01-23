@@ -328,7 +328,7 @@ class Trainer:
                 self.model.eval()
                 running_loss, running_acc = 0.0, 0.0
                 thresholds = self.config.confidence_threshold
-                results = [[] * len(thresholds)] if self.config.training_type == TrainingType.JOINT_TRAINING else []
+                results = [[] for _ in range(len(thresholds))] if self.config.training_type == TrainingType.JOINT_TRAINING else []
 
                 if self.n_gpus > 0:
                     torch.cuda.empty_cache()
@@ -350,7 +350,7 @@ class Trainer:
                             running_loss += loss.item()
                             avg_loss = running_loss / idx
 
-                            pred_spans = [[] * len(thresholds)]
+                            pred_spans = []
                             pred_emotion_labels = []
                             processed_data_batch = [processed_data[idx] for idx in dataset_idx]
 
@@ -363,14 +363,14 @@ class Trainer:
                                 for idx, confidence in enumerate(thresholds):
                                     _pred_spans = self._extract_spans_multilabel(span_logits=span_logits,
                                                                                  text_inp=inp, confidence=confidence)
-                                    pred_spans[idx] = _pred_spans
+                                    pred_spans.append(_pred_spans)
 
                             elif self.config.training_type == TrainingType.EMOTION_CLASSIFICATION:
                                 emotion_logits = out['emotion_logits']
                                 pred_emotion_labels = self._extract_emotion_logits(emotion_logits=emotion_logits)
                             else:
                                 span_logits = out['span_logits']
-                                pred_spans[0] = self._extract_spans(span_logits=span_logits, text_inp=inp)
+                                pred_spans = self._extract_spans(span_logits=span_logits, text_inp=inp)
 
                             if self.config.training_type == TrainingType.JOINT_TRAINING:
 
@@ -379,7 +379,7 @@ class Trainer:
                                 for idx, (_pred_spans, confidence) in enumerate(zip(pred_spans, thresholds)):
                                     results[idx].extend(self._accumulate_results(processed_data_batch,
                                                                                  pred_emotion_labels, _pred_spans))
-                                    _, metrics = evaluate_runtime(results, og_data)
+                                    _, metrics = evaluate_runtime(results[idx], og_data)
                                     weighted_prop_f1, micro_f1 = metrics[2], metrics[-1]
 
                                     self.writer.add_scalar(f'W_prop_F1_conf_{confidence}/val',
