@@ -307,7 +307,7 @@ class EmotionCausalDataset(Dataset):
             for entry in label_indices:
                 if entry[0] != entry[1]:
                     causal_span_label[entry[0]:entry[1] + 1] = 1
-        else:
+        elif self.training_type == TrainingType.SPAN_CLASSIFICATION:
             tokenized_labels = self.tokenizer(causal_span_label, padding='max_length', max_length=512,
                                               return_tensors='pt',
                                               truncation=True)
@@ -324,7 +324,11 @@ class EmotionCausalDataset(Dataset):
             emotion_label = {}
 
         tokenized_inp = {k: v.squeeze().to(self.device) for k, v in tokenized_inp.items()}
-        labels = {**emotion_label, **causal_span_label_map}
+        if self.training_type == TrainingType.EMOTION_CLASSIFICATION:
+        
+            labels = {**emotion_label}
+        else:
+            labels = {**emotion_label, **causal_span_label_map}
         labels = {k: v.to(self.device) for k, v in labels.items()}
 
         return tokenized_inp, labels, item
@@ -372,9 +376,12 @@ def find_nth_occurrenceV2(haystack, needle, n=2):
 
 
 if __name__ == "__main__":
-    path = '../data/raw/SemEval-2024_Task3/dataset_final/train/text_files/text'
+    
+    path = '/workspace/semeval/MultiModalEmotionCauseAnalysis/v2/data/text'
     _tokenizer = AutoTokenizer.from_pretrained("SpanBERT/spanbert-base-cased")
     dataset = EmotionCausalDataset(path=path, config=DatasetConfig.TRAIN,
-                                   training_type=TrainingType.JOINT_TRAINING, tokenizer=_tokenizer)
+                                   training_type=TrainingType.EMOTION_CLASSIFICATION, tokenizer=_tokenizer, )
+#     print(dataset.device)
     da = [dataset[x] for x in range(1000)]
     print(len(dataset))
+    print(dataset[0])
