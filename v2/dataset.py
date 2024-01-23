@@ -173,6 +173,62 @@ class EmotionCausalDataset(Dataset):
                     emotion = conv_i['emotion']
                     caused_in_i = conv_i['caused_by']
                     utt_i = conv_i["text"]
+                    # for j, conv_j in enumerate(conversations):
+                    #     utt_j = conv_j['text']
+                    text_p = f'{utt_i} {self.SPECIAL_TOKEN} '
+                    text = f'{text_p}{utt_all}'
+                    spans = []
+
+                    # for j, causal in conv_i['caused_by'].items():
+                    #     # fp = utt_all.find(causal)+len(text_p)
+                    #     # ep = fp+len(causal)
+                    #     spans.append(causal)
+                    # if j in caused_in_i:
+                    #     spans = caused_in_i[j]
+                            # fp = utt_all.find(causal)+len(text_p)
+                            # ep = fp+len(causal)
+                            # positions = [fp,ep]
+                            # s_i, e_i = positions['start_positions'], positions['end_positions']
+                    processed_data.append({
+                        'conversation_id': scene['conversation_ID'],
+                        'utterance_id_i': conv_i['utterance_ID'],
+                        # 'utterance_id_j': conv_j['utterance_ID'],
+                        'text': text,
+                        'causal_span': list(conv_i['caused_by'].values()),
+                        'emotion': emotion
+                    })
+
+        else:
+            raise NotImplementedError('Need to check in trail data.')
+
+        return processed_data
+    def _process_data_for_joint_model_deprecated(self) -> List[Dict]:
+        processed_data = []
+
+        if self._config != DatasetConfig.TEST:
+            for idx in self._sampling_idx:
+                scene = self.data[idx]
+                conversations = scene['conversation']
+
+                for conv in conversations:
+                    conv['caused_by'] = {}
+
+                causal_pairs = scene['emotion-cause_pairs']
+
+                for emotion_effect, emotion_cause in causal_pairs:
+                    effect_idx = int(emotion_effect.split('_')[0]) - 1
+                    cause_idx = int(emotion_cause.split('_')[0]) - 1
+                    cause_span_txt = emotion_cause.split('_')[1]
+                    conversations[effect_idx]['caused_by'][cause_idx] = cause_span_txt
+
+                utt_all = ' '.join(conv['text'] for conv in conversations)
+
+                # n^2 new examples for joint training.
+
+                for i, conv_i in enumerate(conversations):
+                    emotion = conv_i['emotion']
+                    caused_in_i = conv_i['caused_by']
+                    utt_i = conv_i["text"]
                     for j, conv_j in enumerate(conversations):
                         utt_j = conv_j['text']
                         text = f'{utt_i} {self.SPECIAL_TOKEN} {utt_j} {self.SPECIAL_TOKEN} {utt_all}'
@@ -206,13 +262,28 @@ class EmotionCausalDataset(Dataset):
 
         tokenized_inp = self.tokenizer(text_inp, padding='max_length', max_length=512, return_tensors='pt',
                                        truncation=True)
-        tokenized_labels = self.tokenizer(causal_span_label, return_tensors='pt',
-                                          truncation=True) if causal_span_label[0] != -1 else torch.Tensor(
-            causal_span_label)
 
-        causal_span_label = find_nth_occurrence(tokenized_inp['input_ids'][0], tokenized_labels,
-                                                n=2) if causal_span_label is not None else {}
+        if self.training_type == TrainingType.JOINT_TRAINING:
+            label_indices = [0]*len(causal_span_label)
+            for i in range(len(causal_span_label)):
+                tokenized_labels = self.tokenizer(causal_span_label[i], return_tensors='pt',truncation=True) if causal_span_label[0] != -1 else torch.Tensor(causal_span_label)
+                span_label = find_nth_occurrenceV3(tokenized_inp['input_ids'][0], tokenized_labels, n=2) if causal_span_label is not None else {}
+                label_indices[i] = np.array([span_label['start_positions'], span_label['end_positions']])
 
+            causal_span_label = torch.zeros_like(tokenized_inp['input_ids'][0])
+
+            for entry in label_indices:
+                if entry[0] !=entry[1]:
+                    causal_span_label[entry[0]:entry[1]+1] = 1
+        else:
+            tokenized_labels = self.tokenizer(causal_span_label, padding='max_length', max_length=512,
+                                              return_tensors='pt',
+                                              truncation=True)
+
+            causal_span_label = find_nth_occurrence(tokenized_inp, tokenized_labels,
+                                                    n=2) if causal_span_label is None else {}
+
+        causal_span_label_map = {'span_labels':causal_span_label}
         if emotion_label is not None:
             emo_label = np.zeros(len(self.emotion_labels))
             emo_label[self.emotion_labels[emotion_label]] = 1
@@ -221,7 +292,7 @@ class EmotionCausalDataset(Dataset):
             emotion_label = {}
 
         tokenized_inp = {k: v.squeeze().to(self.device) for k, v in tokenized_inp.items()}
-        labels = {**emotion_label, **causal_span_label}
+        labels = {**emotion_label, **causal_span_label_map}
         labels = {k: v.to(self.device) for k, v in labels.items()}
 
         return tokenized_inp, labels, item
@@ -240,11 +311,34 @@ def find_nth_occurrence(haystack, needle, n=2):
         return {"start_positions": torch.tensor([0]), "end_positions": torch.tensor([0])}
     return {"start_positions": torch.tensor([0]), "end_positions": torch.tensor([0])}
 
+def find_nth_occurrenceV3(haystack, needle, n=2):
+    occurrence = 0
+    occurrences = []
+    if needle[0] != -1:
+        needle = needle['input_ids'][0][1:-1]
+        for i in range(haystack.shape[0] - needle.shape[0] + 1):
+            if torch.equal(haystack[i:i + needle.shape[0]], needle):
+                occurrences.append([i,i + needle.shape[0]])
+
+        if len(occurrences) >1 :
+            return {"start_positions": occurrences[-1][0], "end_positions": occurrences[-1][1]}
+        else:
+            return {"start_positions": occurrences[0][0], "end_positions": occurrences[0][1]}
+    return {"start_positions": 0, "end_positions": 0}
+
+def find_nth_occurrenceV2(haystack, needle, n=2):
+    mask = torch.zeros_like(haystack)
+    occurrence = 0
+    position = find_nth_occurrence(haystack, needle)
+    start_positions = position["start_positions"]
+    end_positions = position["end_positions"]
+    mask[start_positions:end_positions+1] = 1
+    return mask
 
 if __name__ == "__main__":
     path = '../data/raw/SemEval-2024_Task3/dataset_final/train/text_files/text'
     _tokenizer = AutoTokenizer.from_pretrained("SpanBERT/spanbert-base-cased")
     dataset = EmotionCausalDataset(path=path, config=DatasetConfig.TRAIN,
-                                   training_type=TrainingType.SPAN_CLASSIFICATION, tokenizer=_tokenizer)
-    da = dataset[0]
+                                   training_type=TrainingType.JOINT_TRAINING, tokenizer=_tokenizer)
+    da = [dataset[x] for x in range(1000) ]
     print(len(dataset))
