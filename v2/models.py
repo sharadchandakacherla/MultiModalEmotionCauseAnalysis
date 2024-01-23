@@ -72,6 +72,19 @@ class ModelBaseClass(nn.Module):
 
         return total_loss
 
+    def _multi_label_span_loss(self, x, span_logits) -> torch.Tensor:
+        """
+        computes loss for logits of shape (None, seq_len). This is similar to multi-label classification.
+        """
+        loss = None
+        span_label_mask = x.get('span_label_mask', None)
+
+        if span_label_mask is not None:
+            bce_loss = nn.BCEWithLogitsLoss()
+            loss = bce_loss(span_logits, span_label_mask)
+
+        return loss
+
     def _emotion_loss(self, x, emotion_logits) -> torch.Tensor:
         loss = None
         labels = x.get('label', None)
@@ -95,16 +108,23 @@ class JointModel(ModelBaseClass):
         self.hidden_dim_last = self.model.encoder.layer[-1].output.dense.out_features
 
         # Span head is linear
+        # self.span_head = nn.Sequential(
+        #     nn.Linear(self.hidden_dim_last, self.hidden_dim_last // 2),
+        #     nn.GELU(),
+        #     nn.Linear(self.hidden_dim_last // 2, 2)
+        # )
+
+        # Multi-label span classification
         self.span_head = nn.Sequential(
-            nn.Linear(self.hidden_dim_last, self.hidden_dim_last // 2),
-            nn.GELU(),
-            nn.Linear(self.hidden_dim_last // 2, 2)
+            nn.Dropout(self.model.config.hidden_dropout_prob),
+            nn.Linear(self.hidden_dim_last, 1)
         )
 
         # emotion head is non-linear
         self.emotion_head = nn.Sequential(
             nn.Linear(self.hidden_dim_pooler, self.hidden_dim_pooler // 2),
             nn.GELU(),
+            nn.Dropout(self.model.config.hidden_dropout_prob),
             nn.Linear(self.hidden_dim_pooler // 2, no_classes)
         )
 
@@ -116,13 +136,13 @@ class JointModel(ModelBaseClass):
         span_logits = self.span_head(hidden_state)
         emotion_logits = self.emotion_head(pooler_out)
 
-        span_loss = self._span_loss(labels, span_logits)
+        span_label_loss = self._multi_label_span_loss(labels, span_logits)
         emotion_loss = self._emotion_loss(labels, emotion_logits)
 
         total_loss = None
 
-        if span_loss is not None and emotion_loss is not None:
-            total_loss = (span_loss + emotion_loss) / 3
+        if span_label_loss is not None and emotion_loss is not None:
+            total_loss = (span_label_loss + emotion_loss) / 2
 
         return {
             'loss': total_loss,

@@ -17,8 +17,8 @@ class TaskSolve(IntEnum):
 @dataclass
 class TrainerConfig:
     base_path: str = os.getcwd()
-    model_log_path: str = 'finetune_mrm8488_spanbert-finetuned-squadv2_log'
-    model_save_path: str = 'finetune_mrm8488_spanbert-finetuned-squadv2_save'
+    model_log_path: str = 'roberta-base_log_exp1'
+    model_save_path: str = 'roberta-base_save_exp1'
     base_model_name: str = 'mrm8488/spanbert-finetuned-squadv2'
     no_classes: int = 7 # 6 + 1
     train_split_ratio: float = 0.8
@@ -34,3 +34,5 @@ class TrainerConfig:
     solve_task: TaskSolve = TaskSolve.TASK1
     special_token: str = '<SEP>'
     multi_gpu: bool = True
+    using_confidence_threshold: bool = True
+    confidence_threshold: tuple = (0.5, 0.75, 0.9)

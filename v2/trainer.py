@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
-from transformers import get_cosine_schedule_with_warmup
+from transformers import get_constant_schedule_with_warmup
 from tqdm import tqdm
 
 from config import TrainerConfig, TrainingType, TaskSolve
@@ -99,22 +99,8 @@ class Trainer:
         self.val_dataloader = self._get_dataloader(val_dataset, shuffle=False, for_training=False)
         # self.test_dataloader = self._get_dataloader(test_dataset, shuffle=False, for_training=False)
 
-        # self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=config.train_batch_size, shuffle=True)
-        # self.val_dataloader = DataLoader(dataset=val_dataset, batch_size=config.val_batch_size, shuffle=False)
-        #         self.test_dataloader = DataLoader(dataset=test_dataset, batch_size=config.val_batch_size, shuffle=False)
-
         self.writer = SummaryWriter(log_dir=os.path.join(config.base_path, config.model_log_path)) \
             if self.rank == 0 else None
-
-        # total_steps = config.epochs * len(self.train_dataloader)
-        #
-        # self.optim = AdamW(self.model.parameters(), lr=config.lr)
-        # # https://stackoverflow.com/a/61558319
-        # warmup_steps = int(0.1 * len(self.train_dataloader))
-        # self.optim_lr_scheduler = get_cosine_schedule_with_warmup(self.optim, num_warmup_steps=warmup_steps,
-        #                                                           num_training_steps=total_steps)
-        #
-        # self._load_model_state()
 
         self.model = self._map_model_to_device()
         self._load_model_state()
@@ -130,9 +116,8 @@ class Trainer:
         total_steps = self.config.epochs * len(self.train_dataloader)
         # https://stackoverflow.com/a/61558319
         self.optim = AdamW(self.model.parameters(), lr=self.config.lr)
-        warmup_steps = int(0.1 * len(self.train_dataloader))
-        self.optim_lr_scheduler = get_cosine_schedule_with_warmup(self.optim, num_warmup_steps=warmup_steps,
-                                                                  num_training_steps=total_steps)
+        warmup_steps = int(0.01 * len(self.train_dataloader))
+        self.optim_lr_scheduler = get_constant_schedule_with_warmup(self.optim, num_warmup_steps=warmup_steps)
 
         if items:
             checkpoint_path = sorted(items, key=os.path.getctime)[index]
@@ -199,6 +184,17 @@ class Trainer:
         for batch_idx, (start_idx, end_idx) in enumerate(zip(start_span_idx, end_span_idx)):
             mask[batch_idx, start_idx: end_idx + 1] = 1.0
 
+        masked_text_span = text * mask
+
+        tokenizer = self.model.module.tokenizer() if self.n_gpus > 1 else self.model.tokenizer()
+        pred_spans = tokenizer.batch_decode(masked_text_span, skip_special_tokens=True)
+        pred_spans = [span.replace(" ##", "").replace("##", "").strip() for span in pred_spans]
+
+        return pred_spans
+
+    def _extract_spans_multilabel(self, span_logits: torch.Tensor, text_inp: dict, confidence: float) -> list:
+        mask = span_logits >= confidence
+        text = text_inp['input_ids']
         masked_text_span = text * mask
 
         tokenizer = self.model.module.tokenizer() if self.n_gpus > 1 else self.model.tokenizer()
@@ -294,7 +290,8 @@ class Trainer:
                 # reset _metrics for validation.
                 self.model.eval()
                 running_loss, running_acc = 0.0, 0.0
-                results = []
+                thresholds = self.config.confidence_threshold
+                results = [[] * len(thresholds)] if self.config.training_type == TrainingType.JOINT_TRAINING else []
 
                 if self.n_gpus > 0:
                     torch.cuda.empty_cache()
@@ -316,7 +313,7 @@ class Trainer:
                             running_loss += loss.item()
                             avg_loss = running_loss / idx
 
-                            pred_spans = []
+                            pred_spans = [[] * len(thresholds)]
                             pred_emotion_labels = []
                             processed_data_batch = [processed_data[idx] for idx in dataset_idx]
 
@@ -324,36 +321,63 @@ class Trainer:
                                 emotion_logits = out['emotion_logits']
                                 span_logits = out['span_logits']
 
-                                pred_spans = self._extract_spans(span_logits=span_logits, text_inp=inp)
+                                # pred_spans = self._extract_spans(span_logits=span_logits, text_inp=inp)
                                 pred_emotion_labels = self._extract_emotion_logits(emotion_logits=emotion_logits)
+                                for idx, confidence in enumerate(thresholds):
+                                    _pred_spans = self._extract_spans_multilabel(span_logits=span_logits,
+                                                                                 text_inp=inp, confidence=confidence)
+                                    pred_spans[idx] = _pred_spans
 
                             elif self.config.training_type == TrainingType.EMOTION_CLASSIFICATION:
                                 emotion_logits = out['emotion_logits']
                                 pred_emotion_labels = self._extract_emotion_logits(emotion_logits=emotion_logits)
                             else:
                                 span_logits = out['span_logits']
-                                pred_spans = self._extract_spans(span_logits=span_logits, text_inp=inp)
+                                pred_spans[0] = self._extract_spans(span_logits=span_logits, text_inp=inp)
 
-                            results.extend(self._accumulate_results(processed_data_batch,
-                                                                    pred_emotion_labels, pred_spans))
+                            if self.config.training_type == TrainingType.JOINT_TRAINING:
 
-                            _, metrics = evaluate_runtime(results, og_data)
-                            weighted_prop_f1 = metrics[2]
+                                bar_str = f'Val {epoch}/{self.config.epochs} - Loss {avg_loss:.3f}'
 
-                            bar.update()
-                            bar.set_description(f'Val {epoch}/{self.config.epochs} - Loss {avg_loss:.3f} '
-                                                f'W. prop. F1 {weighted_prop_f1:.3f}')
+                                for idx, (_pred_spans, confidence) in enumerate(zip(pred_spans, thresholds)):
+                                    results[idx].extend(self._accumulate_results(processed_data_batch,
+                                                                                 pred_emotion_labels, _pred_spans))
+                                    _, metrics = evaluate_runtime(results, og_data)
+                                    weighted_prop_f1, micro_f1 = metrics[2], metrics[-1]
+
+                                    self.writer.add_scalar(f'W_prop_F1_conf_{confidence}/val',
+                                                           weighted_prop_f1, global_step)
+                                    self.writer.add_scalar(f'micro_F1_conf_{confidence}/val',
+                                                           micro_f1, global_step)
+                                    # Show the middle one
+                                    if idx == (len(thresholds) // 2):
+                                        bar_str = f'{bar_str} W. prop. F1 @ conf {confidence} - {weighted_prop_f1:.3f}'
+                            else:
+                                results.extend(self._accumulate_results(processed_data_batch,
+                                                                        pred_emotion_labels, pred_spans))
+                                _, metrics = evaluate_runtime(results, og_data)
+                                weighted_prop_f1, micro_f1 = metrics[2], metrics[-1]
+
+                                self.writer.add_scalar('W_prop_F1/val', weighted_prop_f1, global_step)
+                                self.writer.add_scalar('micro_F1/val', micro_f1, global_step)
+
+                                bar_str = (f'Val {epoch}/{self.config.epochs} - Loss '
+                                           f'{avg_loss:.3f} W. prop. F1 {weighted_prop_f1:.3f}')
 
                             self.writer.add_scalar('Loss/val', avg_loss, global_step)
-                            self.writer.add_scalar('W_prop_F1/val', weighted_prop_f1, global_step)
+
+                            bar.update()
+                            bar.set_description(bar_str)
                             global_step += 1
+
+                if self.config.training_type == TrainingType.JOINT_TRAINING:
+                    results = dict(zip(thresholds, results))
 
                 with open(f"validation_{epoch}.json", "w") as f:
                     validation_logs = {f"results_{epoch}": results}
                     json.dump(validation_logs, f, indent=4)
 
                 self.writer.flush()
-                results.clear()
 
             if self.n_gpus > 0:
                 torch.cuda.empty_cache()
