@@ -17,6 +17,7 @@ from config import TrainerConfig, TrainingType, TaskSolve
 from dataset import DatasetConfig, EmotionCausalDataset
 from models import ModelBaseClass, JointModel, EmotionClassification, SpanClassification
 from metrics.evaluate import evaluate_runtime, evaluate_1_2
+import torch.nn as nn
 
 
 def select_model(training_type: TrainingType, solve_task: TaskSolve) -> Union[None, Type[ModelBaseClass]]:
@@ -288,7 +289,15 @@ class Trainer:
                 for idx, (inp, labels, _) in enumerate(self.train_dataloader, start=1):
                     self.optim.zero_grad()
 
-                    out = self.model(inp, labels)
+                    if self.config.training_type == TrainingType.EMOTION_CLASSIFICATION:
+                        #                         s = inp['input_ids'].shape
+                        #                         s1 = inp['attention_mask'].shape
+                        #                         print(f'the labels are {s} {s1}')
+                        #                         print(labels['label'][0])
+                        out = self.model({'input_ids': inp['input_ids'], 'attention_mask': inp['attention_mask'],
+                                          'labels': labels['label']})
+                    else:
+                        out = self.model(inp, labels)
                     loss = out['loss']
                     loss.backward()
 
@@ -301,9 +310,15 @@ class Trainer:
                         self.writer.add_scalar('Loss/train', avg_loss, global_step=global_step)
 
                         if self.config.training_type == TrainingType.EMOTION_CLASSIFICATION:
-                            avg_emo_acc = running_acc / idx
-                            bar_string = f'{bar_string} - emo_acc: {avg_emo_acc:.3f}'
-                            self.writer.add_scalar('Emo_acc/train', avg_emo_acc, global_step=global_step)
+                            emotion_logits = out['emotion_logits']
+                            pred_emotion_labels = emotion_logits
+                            true_emotion_label = labels['label']
+                            true_emotion_label = nn.functional.one_hot(true_emotion_label,
+                                                                       num_classes=self.config.no_classes)
+                            matched_emotions = (pred_emotion_labels == true_emotion_label)
+                            running_acc += (matched_emotions.sum() / len(matched_emotions)).item()
+                            bar_string = f'{bar_string} - emo_acc: {running_acc:.3f}'
+                            self.writer.add_scalar('Emo_acc/train', running_acc, global_step=global_step)
 
                         bar.update()
                         bar.set_description(bar_string)
@@ -330,7 +345,8 @@ class Trainer:
                 self.model.eval()
                 running_loss, running_acc = 0.0, 0.0
                 thresholds = self.config.confidence_threshold
-                results = [[] for _ in range(len(thresholds))] if self.config.training_type == TrainingType.JOINT_TRAINING else []
+                results = [[] for _ in
+                           range(len(thresholds))] if self.config.training_type == TrainingType.JOINT_TRAINING else []
 
                 if self.n_gpus > 0:
                     torch.cuda.empty_cache()
@@ -346,7 +362,12 @@ class Trainer:
                 with tqdm(total=n_val, colour='red', leave=True) as bar:
                     for idx, (inp, labels, dataset_idx) in enumerate(self.val_dataloader, start=1):
                         with torch.no_grad():
-                            out = model(inp, labels)
+                            if self.config.training_type == TrainingType.EMOTION_CLASSIFICATION:
+                                out = self.model(
+                                    {'input_ids': inp['input_ids'], 'attention_mask': inp['attention_mask'],
+                                     'labels': labels['label']})
+                            else:
+                                out = model(inp, labels)
                             loss = out['loss']
 
                             running_loss += loss.item()
@@ -369,7 +390,14 @@ class Trainer:
 
                             elif self.config.training_type == TrainingType.EMOTION_CLASSIFICATION:
                                 emotion_logits = out['emotion_logits']
-                                pred_emotion_labels = self._extract_emotion_logits(emotion_logits=emotion_logits)
+                                pred_emotion_labels = emotion_logits
+                                true_emotion_label = labels['label']
+                                true_emotion_label = nn.functional.one_hot(true_emotion_label,
+                                                                           num_classes=self.config.no_classes)
+                                matched_emotions = (pred_emotion_labels == true_emotion_label)
+                                running_acc += (matched_emotions.sum() / len(matched_emotions)).item()
+
+
                             else:
                                 span_logits = out['span_logits']
                                 pred_spans = self._extract_spans(span_logits=span_logits, text_inp=inp)

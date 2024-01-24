@@ -317,9 +317,10 @@ class EmotionCausalDataset(Dataset):
 
         causal_span_label_map = {'span_labels': causal_span_label}
         if emotion_label is not None:
-            emo_label = np.zeros(len(self.emotion_labels))
-            emo_label[self.emotion_labels[emotion_label]] = 1
-            emotion_label = {"label": torch.from_numpy(emo_label)}
+            # emo_label = np.zeros(len(self.emotion_labels))
+            # emo_label[self.emotion_labels[emotion_label]] = 1
+            # emotion_label = {"label": torch.from_numpy(emo_label)}
+            emotion_label = torch.tensor(self.emotion_labels[emotion_label])
         else:
             emotion_label = {}
 
@@ -377,7 +378,7 @@ def find_nth_occurrenceV2(haystack, needle, n=2):
 
 if __name__ == "__main__":
     
-    path = '/workspace/semeval/MultiModalEmotionCauseAnalysis/v2/data/text'
+    path = '/Users/sharadc/Documents/uic/semester4/CS598/MultiModalEmotionCauseAnalysis/data/raw/SemEval-2024_Task3/dataset_final/train/text_files/text/'
     _tokenizer = AutoTokenizer.from_pretrained("SpanBERT/spanbert-base-cased")
     dataset = EmotionCausalDataset(path=path, config=DatasetConfig.TRAIN,
                                    training_type=TrainingType.EMOTION_CLASSIFICATION, tokenizer=_tokenizer, )

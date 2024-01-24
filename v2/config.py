@@ -29,7 +29,7 @@ class TrainerConfig:
     train_batch_size: int = 4 * 8
     val_batch_size: int = 4 * 8
 #     is_train: bool = True
-    training_type: TrainingType = TrainingType.JOINT_TRAINING
+    training_type: TrainingType = TrainingType.EMOTION_CLASSIFICATION
     freeze_base_model: bool = False
     solve_task: TaskSolve = TaskSolve.TASK1
     special_token: str = '<SEP>'
