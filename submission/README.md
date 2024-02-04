@@ -24,9 +24,12 @@
 <h1> Credits </h1>
 We are grateful for FAIR to have made the code for SpanBERT and the model weights publicly available for research.
 Please refer to the original codebase here as written by Mandar Joshi et. al.
+
+```
   @article{joshi2019spanbert,
       title={{SpanBERT}: Improving Pre-training by Representing and Predicting Spans},
       author={Mandar Joshi and Danqi Chen and Yinhan Liu and Daniel S. Weld and Luke Zettlemoyer and Omer Levy},
       journal={arXiv preprint arXiv:1907.10529},
       year={2019}
     }
+```
