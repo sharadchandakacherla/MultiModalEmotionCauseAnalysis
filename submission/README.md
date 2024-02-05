@@ -13,7 +13,7 @@
   <li>Run the notebook to extract emotions, and enrich the emotional utterances with emotion</li>
   <li><p>Each input to our RoBERTa model looks like U_i \<\SEP\> U_all , where U_i means the current utterance and U_all is all the conversations concatenated </p></li> 
   <li>Use the enriched files to further fine-tune FAIR's SpanBERT pre-trained on SQuAD 2.0 dataset with the given hyper-parameters with the following input / hard prompt in the QA form</li>
-  <li><p>Each input to our SpanBERT model looks like a SQuAD input : "The current utterance is - {current_utterance}. What caused the {nominalized_emotion[current_emotion]} in the current utterance?"[SEP] All converations concatednated </p></li>
+  <li><p>Each input to our SpanBERT model looks like a SQuAD input : "The current utterance is - {current_utterance}. What caused the {nominalized_emotion[current_emotion]} in the current utterance?"[SEP] All conversations concatenated </p></li>
   <li> Download FAIR's model finetuned on SQuAD 2.0 and place it in a directory. To download the file run <code>bash SpanBERT/code/download_finetuned.sh \<\model_dir\> squad2 </model_dir> </code> </li>
   <li> use this commad for running the span extraction code <code>python SpanBERT/code/run_meca.py --do_train --do_eval  --model /workspace/masumm_sb/SpanBERT/meca_output_fair_squad  --train_file Subtask_1_train.json   --train_batch_size 12  --eval_batch_size 12  
   --learning_rate 2e-5 --num_train_epochs 5 --max_seq_length 400 --doc_stride 128 --eval_metric f1 --output_dir meca_output_fair_squad_eval_2</code></li>
