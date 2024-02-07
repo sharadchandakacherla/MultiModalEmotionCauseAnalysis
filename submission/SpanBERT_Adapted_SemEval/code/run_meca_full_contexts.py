@@ -131,7 +131,78 @@ def _get_emotion_cause_labels(example, current_emotion, current_conv_id, convers
             # raise Exception(f"some issue in finding label {substring} in {example['conversation_ID']}")
 
     return possible_cause_labels
-    
+
+def read_squad_examples(input_file, is_training=False, version_2_with_negative=False):
+    """Read a SQuAD json file into a list of SquadExample."""
+    #     with open(input_file, "r", encoding='utf-8') as reader:
+    #         input_data = json.load(reader)["data"]
+    input_data = input_file
+
+    def is_whitespace(c):
+        if c == " " or c == "\t" or c == "\r" or c == "\n" or ord(c) == 0x202F:
+            return True
+        return False
+
+    examples = []
+    for entry in input_data:
+        for paragraph in entry["paragraphs"]:
+            paragraph_text = paragraph["context"]
+            doc_tokens = []
+            char_to_word_offset = []
+            prev_is_whitespace = True
+            for c in paragraph_text:
+                if is_whitespace(c):
+                    prev_is_whitespace = True
+                else:
+                    if prev_is_whitespace:
+                        doc_tokens.append(c)
+                    else:
+                        doc_tokens[-1] += c
+                    prev_is_whitespace = False
+                char_to_word_offset.append(len(doc_tokens) - 1)
+
+            for qa in paragraph["qas"]:
+                qas_id = qa["id"]
+                question_text = qa["question"]
+                start_position = None
+                end_position = None
+                orig_answer_text = None
+                is_impossible = False
+                if is_training:
+                    if version_2_with_negative:
+                        is_impossible = qa["is_impossible"]
+                    if (len(qa["answers"]) != 1) and (not is_impossible):
+                        raise ValueError(
+                            "For training, each question should have exactly 1 answer.")
+                    if not is_impossible:
+                        answer = qa["answers"][0]
+                        orig_answer_text = answer["text"]
+                        answer_offset = answer["answer_start"]
+                        answer_length = len(orig_answer_text)
+                        start_position = char_to_word_offset[answer_offset]
+                        end_position = char_to_word_offset[answer_offset + answer_length - 1]
+                        actual_text = " ".join(doc_tokens[start_position:(end_position + 1)])
+                        cleaned_answer_text = " ".join(
+                            whitespace_tokenize(orig_answer_text))
+                        if actual_text.find(cleaned_answer_text) == -1:
+                            #                             logger.warning("Could not find answer: '%s' '%s' vs. '%s'",
+                            #                                            qas_id, actual_text, cleaned_answer_text)
+                            continue
+                    else:
+                        start_position = -1
+                        end_position = -1
+                        orig_answer_text = ""
+
+                example = SquadExample(
+                    qas_id=qas_id,
+                    question_text=question_text,
+                    doc_tokens=doc_tokens,
+                    orig_answer_text=orig_answer_text,
+                    start_position=start_position,
+                    end_position=end_position,
+                    is_impossible=is_impossible)
+                examples.append(example)
+    return examples
 def read_squad_examplesV2(input_file, is_training=True):
     ds = []
     import json
@@ -1289,26 +1360,25 @@ def main(args):
     dataset_path = args.train_file
     import json
     with open(dataset_path, "r") as f:
-        data = json.load(f)
-    print(f'len of data {len(data)}')
+        input_data = json.load(f)
+    print(f'len of data {len(input_data)}')
 
-    data_tf = data
+    # data_tf = data
 
     train_eval_ratio = 0.8
-    input_data = data_tf
     training_offset = int(train_eval_ratio * len(input_data))
-
     og_val_dataset = input_data[training_offset:]
 
     if args.do_train or (not args.eval_test):
         # with open(args.dev_file) as f:
         #     dataset_json = json.load(f)
-#         eval_data = input_data[training_offset:]
-        eval_data = input_data
+        eval_data = input_data if args.do_test else input_data[training_offset:]
+
         #         squad_ds_eval = convert_to_squadV2(eval_data)
         squad_ds_eval = convert_to_squadV3_full_contexts_improvised(eval_data, False)
-        with open(os.path.join(args.output_dir, 'semeval_test_set_from_remote_no_labels_regen.json'), 'w') as es:
-            json.dump(squad_ds_eval, es)
+        if args.do_test:
+            with open(os.path.join(args.output_dir, 'squad_like_eval_set_without_labels.json'), 'w') as es:
+                json.dump(squad_ds_eval, es)
         eval_dataset = squad_ds_eval['data']
         # eval_dataset = eval_data
         eval_examples = read_squad_examples(input_file=eval_dataset, is_training=False, version_2_with_negative=args.version_2_with_negative)
@@ -1493,9 +1563,12 @@ def main(args):
             #             eval_dataset = dataset_json['data']
             #             eval_examples = read_squad_examples(
             #                 input_file=args.test_file, is_training=False, version_2_with_negative= False)
-            eval_data = input_data[training_offset:]
+            eval_data = input_data if args.do_test else input_data[training_offset:]
             #             squad_ds_eval = convert_to_squadV2(eval_data)
             squad_ds_eval = convert_to_squadV3_full_contexts_improvised(eval_data,False)
+            if args.do_test:
+                with open(os.path.join(args.output_dir, 'squad_like_eval_set_without_labels.json'), 'w') as es:
+                    json.dump(squad_ds_eval, es)
 
             eval_dataset = squad_ds_eval['data']
             # eval_dataset = eval_data
@@ -1567,6 +1640,7 @@ if __name__ == "__main__":
                              "be truncated to this length.")
     parser.add_argument("--do_train", action='store_true', help="Whether to run training.")
     parser.add_argument("--do_eval", action='store_true', help="Whether to run eval on the dev set.")
+    parser.add_argument("--do_test", action='store_true', help="Whether to run eval on the dev set.")
     parser.add_argument("--do_lower_case", action='store_true', help="Set this flag if you are using an uncased model.")
     parser.add_argument("--eval_test", action='store_true', help='Wehther to run eval on the test set.')
     parser.add_argument("--train_batch_size", default=32, type=int, help="Total batch size for training.")
