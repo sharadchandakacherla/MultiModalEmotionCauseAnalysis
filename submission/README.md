@@ -75,7 +75,14 @@ python process_after_span_extraction.py --enriched_dataset_with_emotion ./raw_fi
 python char_spans_to_token_spans.py --predicted_spans_path final_results.json
 ```
 </li>
+<li> <b>Flow diagram for the above steps</b>
+
+![alt text](flow_diagram.png) 
+
+</li>
 </ol>
+
+
 
 [//]: # (<h1> Generate the output file to submit to codalab </h1>)
 
