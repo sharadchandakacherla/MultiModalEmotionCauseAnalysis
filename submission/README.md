@@ -2,12 +2,33 @@
 
 <h1> Requirements </h1>
 <ol>
-<li> Create two environments one for Emotion classification and the other for Span extraction to avoid any conflicts amongst the dependencies</li>
-<li> For the step 1 i.e, emotion extraction from the emotion_extraction.ipynb, the environment can be created by running the first cell of the notebook. </li>
+<li> Create two environments (recommended, might be able to run only with step 2) one for Emotion classification and the other for Span extraction to avoid any conflicts amongst the dependencies</li>
+<li> For the step 1 i.e, emotion extraction from the emotion_extraction.ipynb, the environment can be created by running the first cell of the notebook. <br/>These packages are :
+
+```bash
+pip install transformers[torch]
+pip install datasets
+pip install accelerate -U
+pip install ipywidgets
+pip install scikit-learn
+pip install boto3
+```
+
+</li>
   <li>For the step 2, please refer to the file requirements.txt</li>  
 <li>One can choose to install all the requirements either in a conda environment/ venv or directly on their python installation</li>
 
-  <li>Install the file using the following command <code>pip install -r requirements.txt</code></li>
+  <li>Install the file using the following command 
+
+```bash 
+pip install -r requirements.txt
+```
+</li>
+<li>
+All the weights and raw files used for the inference on trained models for the contest can be found in this 
+
+[drive](https://drive.google.com/drive/folders/14kVF4-6L0wu5SGkPyUQTS8PCm0uuNjyO?usp=drive_link) link.
+</li>
 </ol>
 
 <h1> Methodology </h1>
@@ -17,17 +38,43 @@
   <li>Each input to our RoBERTa model looks like <code>U_i [SEP] U_all</code> , where U_i means the current utterance and U_all is all the conversations concatenated .</li> 
   <li>Create the enriched files by using <b>Section 1.6 and onwards</b> from <code>./emotion_extraction.ipynb</code>. This will create the <code>enriched_data.json</code> <b>in the same directory as the saved models set in step 1</b>. Use the enriched files to further fine-tune FAIR's SpanBERT pre-trained on SQuAD 2.0 dataset with the given hyper-parameters with the following input / hard prompt in the QA form</li>
   <li><p>Each input prompt (hard prompt) to our SpanBERT model looks like a typical SQuAD input : <code>The current utterance is - {current_utterance}. What caused the {current_emotion} in the current utterance?[SEP] all_conversations_in_utterance_concatenated</code> </p></li>
-  <li> Download FAIR's model finetuned on SQuAD 2.0 and place it in a directory. To download the file run <code>bash SpanBERT/code/download_finetuned.sh \<\model_dir\> squad2 </model_dir> </code> </li>
-  <li> <b>Use this commad for running the span extraction code training (skip to next step if running inference)</b> <code>python SpanBERT/code/run_meca.py --do_train --do_eval  --model /workspace/masumm_sb/SpanBERT/meca_output_fair_squad  --train_file Subtask_1_train.json   --train_batch_size 12  --eval_batch_size 12  
-  --learning_rate 2e-5 --num_train_epochs 5 --max_seq_length 400 --doc_stride 128 --eval_metric f1 --output_dir meca_output_fair_squad_eval_2</code></li>
-<li> <b>Use this commad for running the span extraction code inference </b> <code>python SpanBERT/code/run_meca.py  --do_eval  --model span_model  --train_file Subtask_1_train.json   --train_batch_size 12  --eval_batch_size 12  
-  --learning_rate 2e-5 --num_train_epochs 5 --max_seq_length 400 --doc_stride 128 --eval_metric f1 --output_dir meca_output_fair_squad_eval_2</code></li>
-  <li> The last step will create two json files (a) SpanBERT predictions called <b>predictions_eval.json</b> (b) evaluation data in SQuAD 2.0 format called <b>test_set_squad_format.json</b> The second file will be used while reproducing the submission score</li>
-<li> Now, run these <b>two scripts (a) and (b)</b> in order to get the data in the final format as required by SemEval organizers. <b>(a)</b> <code>python process_after_span_extraction.py --enriched_dataset_with_emotions
-enriched_data.json --span_predictions_eval ./SpanBERT_Adapted_SemEval/code/reduced_contexts/predictions_eval.json
---evaluation_span_extraction_file /Users/sharadc/Documents/uic/summer_research/SpanBERT/code/reduced_contexts/semeval_test_set_from_remote_no_labels_regen_reduced_contexts.json
+  <li> Download FAIR's model finetuned on SQuAD 2.0 and place it in a directory <b>(only if training the model is required, for inference skip to step 7)</b>. To download the file run 
+
+```bash 
+bash ./SpanBERT/code/download_finetuned.sh fair_squad squad2  
+``` 
+</li>
+  <li> <b>Use this command for running the span extraction code training (skip to next step if running inference on submitted model)</b> 
+
+```bash
+python ./SpanBERT/code/run_meca_final.py --do_train --do_eval   --model fair_squad/squad2 --train_file Subtask_1_train.json --train_batch_size 12 --eval_batch_size 12 --learning_rate 2e-5 --num_train_epochs 5 --max_seq_length 400 --doc_stride 128 --eval_metric f1 --output_dir meca_final_train
+```
+</li>
+<li> <b>Use this commad for running the span extraction code inference </b> 
+
+```bash
+python ./SpanBERT/code/run_meca_final.py --do_eval --do_test --model span_model_rc --train_file ./raw_files_used_for_codalab_leaderboard/enriched_data.json --train_batch_size 12 --eval_batch_size 12 --learning_rate 2e-5 --num_train_epochs 5 --max_seq_length 400 --doc_stride 128 --eval_metric f1 --output_dir meca_final_eval_submission
+```
+
+</li>
+<li> The last step will create two json files (a) SpanBERT predictions called <b>predictions_eval.json</b> (b) evaluation data in SQuAD 2.0 format called <b>test_set_squad_format.json</b> The second file will be used while reproducing the submission score</li>
+<li> Now, run these <b>two scripts (a) and (b)</b> in order to get the data in the final format as required by SemEval organizers. <br />
+<b>(a)</b> 
+
+```bash
+python process_after_span_extraction.py --enriched_dataset_with_emotion ./raw_files_used_for_codalab_leaderboard/enriched_data.json 
+--span_predictions_eval ./SpanBERT/code/reduced_contexts/predictions_eval.json
+--evaluation_span_extraction_file ./raw_files_used_for_codalab_leaderboard/semeval_test_set_from_remote_no_labels_regen.json
 --evaluation_dataset_file Subtask_1_test.json
---final_save_file final_results.json</code>. <b>(b)</b> <code>python char_spans_to_token_spans.py --predicted_spans_path final_results.json</code>
+--final_save_file final_results.json
+```
+
+<b>(b)</b> 
+
+```bash
+python char_spans_to_token_spans.py --predicted_spans_path final_results.json
+```
+</li>
 </ol>
 
 [//]: # (<h1> Generate the output file to submit to codalab </h1>)
