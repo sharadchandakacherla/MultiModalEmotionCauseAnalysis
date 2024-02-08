@@ -132,6 +132,7 @@ def _get_emotion_cause_labels(example, current_emotion, current_conv_id, convers
 
     return possible_cause_labels
 
+
 def read_squad_examples(input_file, is_training=False, version_2_with_negative=False):
     """Read a SQuAD json file into a list of SquadExample."""
     #     with open(input_file, "r", encoding='utf-8') as reader:
@@ -203,6 +204,8 @@ def read_squad_examples(input_file, is_training=False, version_2_with_negative=F
                     is_impossible=is_impossible)
                 examples.append(example)
     return examples
+
+
 def read_squad_examplesV2(input_file, is_training=True):
     ds = []
     import json
@@ -310,6 +313,7 @@ def read_squad_examplesV2(input_file, is_training=True):
 
     return ds
 
+
 def convert_to_squadV2(input_data):
     nominalized_emotion = {
         "anger": "anger",
@@ -361,6 +365,7 @@ def convert_to_squadV2(input_data):
 
     return {"data": data}
 
+
 def convert_to_squadV3_full_contexts(input_data):
     nominalized_emotion = {
         "anger": "anger",
@@ -404,7 +409,7 @@ def convert_to_squadV3_full_contexts(input_data):
                 qas = {}
                 qas['question'] = question_prompt
                 # qas['id'] = idx_prefix + current_utterance_id
-                qas['id'] = (idx_prefix + current_utterance_id)*100 + le_idx
+                qas['id'] = (idx_prefix + current_utterance_id) * 100 + le_idx
                 qas['is_impossibe'] = False
                 qas['answers'] = [{"text": label_entry[2], "answer_start": label_entry[0]}]
                 obj['qas'] = [qas]
@@ -412,6 +417,7 @@ def convert_to_squadV3_full_contexts(input_data):
     data.append(data_obj)
 
     return {"data": data}
+
 
 def convert_to_squadV3_full_contexts_improvised(input_data, train=False):
     nominalized_emotion = {
@@ -422,7 +428,6 @@ def convert_to_squadV3_full_contexts_improvised(input_data, train=False):
         "sadness": "sadness",
         "surprise": "surprise"
     }
-
 
     def get_emotion(utt, emotions_preds):
         for emo in emotions_preds:
@@ -438,7 +443,8 @@ def convert_to_squadV3_full_contexts_improvised(input_data, train=False):
         idx_prefix = int(example['conversation_ID']) * 10000
         ecp = example['emotion-cause_pairs']
         for i, current_utt in enumerate(example['conversation']):
-            current_emotion = get_emotion(current_utt['utterance_ID'], ecp)
+            current_emotion = get_emotion(current_utt['utterance_ID'], ecp) if 'emotion' not in current_utt else \
+            current_utt['emotion']
             if current_emotion == 'neutral':
                 continue
             current_utterance = current_utt['text']
@@ -467,7 +473,7 @@ def convert_to_squadV3_full_contexts_improvised(input_data, train=False):
                     qas = {}
                     qas['question'] = question_prompt
                     # qas['id'] = idx_prefix + current_utterance_id
-                    qas['id'] = (idx_prefix + current_utterance_id)*100 + le_idx
+                    qas['id'] = (idx_prefix + current_utterance_id) * 100 + le_idx
                     qas['is_impossibe'] = False
                     qas['answers'] = [{"text": label_entry[2], "answer_start": label_entry[0]}]
                     obj['qas'] = [qas]
@@ -487,6 +493,7 @@ def convert_to_squadV3_full_contexts_improvised(input_data, train=False):
 
     return {"data": data}
 
+
 def does_anticipation_exist_in_text(point, id):
     for entry in point['emotion-cause_pairs']:
         id1 = int(entry[0].split("_")[0])
@@ -495,6 +502,7 @@ def does_anticipation_exist_in_text(point, id):
             if id2 > id1:
                 return True
     return False
+
 
 def convert_to_squadV4_full_contexts_for_anticipation(input_data):
     nominalized_emotion = {
@@ -553,6 +561,7 @@ def convert_to_squadV4_full_contexts_for_anticipation(input_data):
     data.append(data_obj)
 
     return {"data": data}
+
 
 def convert_examples_to_features(examples, tokenizer, max_seq_length,
                                  doc_stride, max_query_length, is_training):
@@ -707,6 +716,7 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length,
 
     return features
 
+
 def _improve_answer_span(doc_tokens, input_start, input_end, tokenizer,
                          orig_answer_text):
     """Returns tokenized answer spans that better match the annotated answer."""
@@ -719,6 +729,7 @@ def _improve_answer_span(doc_tokens, input_start, input_end, tokenizer,
                 return (new_start, new_end)
 
     return (input_start, input_end)
+
 
 def _check_is_max_context(doc_spans, cur_span_index, position):
     """Check if this is the 'max context' doc span for the token."""
@@ -738,6 +749,7 @@ def _check_is_max_context(doc_spans, cur_span_index, position):
             best_span_index = span_index
 
     return cur_span_index == best_span_index
+
 
 RawResult = collections.namedtuple("RawResult",
                                    ["unique_id", "start_logits", "end_logits"])
@@ -1208,37 +1220,20 @@ def evaluate(args, model, device, eval_dataset, eval_dataloader,
         for k in preds:
             if na_probs[k] > result['best_f1_thresh']:
                 preds[k] = ''
+    elif args.do_test:
+        print("returning the predictions for after running inference on evaluation set")
+        return {}, preds, nbest_preds
     else:
-        #commenting next line for testing 
-#        c exact_raw, f1_raw = get_raw_scores(eval_dataset, preds)
-        # f"{conversation_ID}_{i}"  ; i happens to align with utterance_ID
-        #         question_ids = list(preds.keys())
-        #         datapoints = []
-
-        #         for datapoint in og_val_dataset:
-        #             conversation_id = datapoint['conversation_ID']
-        #             conversations = []
-        #             emotion_cause_pairs = []
-
-        #             for conversation in datapoint['conversation']:
-        #                 conversations.append(ConversationItem(conversation['utterance_ID'], conversation['text'], conversation['speaker']))
-
-        #             for pair in datapoint['emotion_cause_pairs']:
-        #                 emotion_cause_pairs.append(EmotionCausePairItem(*pair))
-
-        #             datapoints.append(DataPoint(conversation_id, conversations, emotion_cause_pairs))
-
-        #         pred_data = [data.to_dict() for data in datapoints]
-        #         evaluate_1_2(pred_data=pred_data, gold_data=og_val_dataset)
-
+        # commenting next line for testing
+        exact_raw, f1_raw = get_raw_scores(eval_dataset, preds)
         # TODO - Call semeval evaluate methods here...
-#       c  result = make_eval_dict(exact_raw, f1_raw)
-#     c logger.info(f'here results {result}')
+        result = make_eval_dict(exact_raw, f1_raw)
+        logger.info(f'here results {result}')
         logger.info("***** Eval results *****")
-#     for key in sorted(result.keys()):
-#         logger.info("  %s = %s", key, str(result[key]))
-#    c return result, preds, nbest_preds
-    return {}, preds, nbest_preds
+        for key in sorted(result.keys()):
+            logger.info("  %s = %s", key, str(result[key]))
+        return result, preds, nbest_preds
+
 
 def get_indices(main_string, substring):
     # print("inside get_indices")
@@ -1317,6 +1312,7 @@ def final_check(data_tf):
 
     return final_data
 
+
 def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
     n_gpu = torch.cuda.device_count()
@@ -1339,12 +1335,17 @@ def main(args):
         raise ValueError("At least one of `do_train` or `do_eval` must be True.")
 
     if args.do_train:
-        assert (args.train_file is not None) and (args.dev_file is not None)
+        #         assert (args.train_file is not None) and (args.dev_file is not None)
+        assert (args.train_file is not None)
 
     if args.eval_test:
         assert args.test_file is not None
-    else:
-        assert args.dev_file is not None
+
+    if args.do_train and args.do_eval and args.do_test:
+        raise ValueError(
+            " do_train and do_eval can be paired or passed individually. do_eval and do_test can be paired or passed individually. All 3 do_train, do_eval and do_test can't be true together")
+    #     else:
+    #         assert args.dev_file is not None
 
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
@@ -1357,6 +1358,7 @@ def main(args):
     tokenizer = BertTokenizer.from_pretrained("spanbert-base-cased", do_lower_case=args.do_lower_case)
 
     # dataset_path = "/workspace/SpanBERT/code/redundant/MultiModalEmotionCauseAnalysis/v2/results_30_epochs_data_leak_corrected_shuffled_ui_uall_custom_roberta_base_weighted/enriched_data.json"
+    assert os.path.isfile(args.train_file)
     dataset_path = args.train_file
     import json
     with open(dataset_path, "r") as f:
@@ -1364,7 +1366,6 @@ def main(args):
     print(f'len of data {len(input_data)}')
 
     # data_tf = data
-
     train_eval_ratio = 0.8
     training_offset = int(train_eval_ratio * len(input_data))
     og_val_dataset = input_data[training_offset:]
@@ -1372,16 +1373,21 @@ def main(args):
     if args.do_train or (not args.eval_test):
         # with open(args.dev_file) as f:
         #     dataset_json = json.load(f)
-        eval_data = input_data if args.do_test else input_data[training_offset:]
+        eval_data = []
+        if args.do_test:
+            eval_data = input_data
+        else:
+            eval_data = input_data[training_offset:]
 
         #         squad_ds_eval = convert_to_squadV2(eval_data)
-        squad_ds_eval = convert_to_squadV3_full_contexts_improvised(eval_data, False)
+        squad_ds_eval = convert_to_squadV3_full_contexts_improvised(eval_data, args.do_train)
         if args.do_test:
             with open(os.path.join(args.output_dir, 'squad_like_eval_set_without_labels.json'), 'w') as es:
                 json.dump(squad_ds_eval, es)
         eval_dataset = squad_ds_eval['data']
         # eval_dataset = eval_data
-        eval_examples = read_squad_examples(input_file=eval_dataset, is_training=False, version_2_with_negative=args.version_2_with_negative)
+        eval_examples = read_squad_examples(input_file=eval_dataset, is_training=False,
+                                            version_2_with_negative=args.version_2_with_negative)
         eval_features = convert_examples_to_features(
             examples=eval_examples,
             tokenizer=tokenizer,
@@ -1404,7 +1410,7 @@ def main(args):
 
         training_data = input_data[:training_offset]
         #         squad_ds = convert_to_squadV2(training_data)
-        squad_ds = convert_to_squadV3_full_contexts_improvised(training_data, False)
+        squad_ds = convert_to_squadV3_full_contexts_improvised(training_data, args.do_train)
         squad_ds = squad_ds['data']
 
         train_examples = read_squad_examples(
@@ -1565,7 +1571,7 @@ def main(args):
             #                 input_file=args.test_file, is_training=False, version_2_with_negative= False)
             eval_data = input_data if args.do_test else input_data[training_offset:]
             #             squad_ds_eval = convert_to_squadV2(eval_data)
-            squad_ds_eval = convert_to_squadV3_full_contexts_improvised(eval_data,False)
+            squad_ds_eval = convert_to_squadV3_full_contexts_improvised(eval_data, args.do_train)
             if args.do_test:
                 with open(os.path.join(args.output_dir, 'squad_like_eval_set_without_labels.json'), 'w') as es:
                     json.dump(squad_ds_eval, es)
